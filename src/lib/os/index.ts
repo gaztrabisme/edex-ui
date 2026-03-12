@@ -15,6 +15,10 @@ export async function getKernelVersion(): Promise<string> {
 	return (await invoke('kernel_version')) || 'UNKNOWN';
 }
 
+export async function readHistory(): Promise<string[]> {
+	return invoke('read_history');
+}
+
 export async function resizeSession(id: string, rows: number, cols: number) {
 	await emit(id, {
 		type: 'Resize',

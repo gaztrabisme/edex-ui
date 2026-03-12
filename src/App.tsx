@@ -5,8 +5,8 @@ import Terminal from '@/components/terminal';
 
 function App() {
 	return (
-		<div class="bg-main text-main flex size-full flex-col flex-nowrap">
-			<div class="flex h-[62vh] w-full flex-row flex-nowrap">
+		<div class="bg-main text-main flex h-screen w-full flex-col flex-nowrap overflow-hidden">
+			<div class="flex h-[62vh] w-full shrink-0 flex-row flex-nowrap overflow-hidden">
 				<System />
 				<Terminal />
 				<Network />

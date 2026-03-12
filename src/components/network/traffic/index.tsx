@@ -44,7 +44,7 @@ function NetworkTraffic(props: NetworkTrafficProps): JSX.Element {
 				grid: {
 					millisPerLine: 5000,
 					fillStyle: 'transparent',
-					strokeStyle: style().colors.main,
+					strokeStyle: `${style().colors.main.replace('rgb', 'rgba').replace(')', ', 0.15)')}`,
 					verticalSections: 3,
 					borderVisible: false,
 				},
@@ -59,7 +59,7 @@ function NetworkTraffic(props: NetworkTrafficProps): JSX.Element {
 	);
 
 	const timeSeriesOptions = {
-		lineWidth: 1.7,
+		lineWidth: 2.5,
 		strokeStyle: style().colors.main,
 	};
 

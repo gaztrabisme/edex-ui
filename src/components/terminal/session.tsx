@@ -8,6 +8,7 @@ import {
 	updateCurrentSession,
 	writeToSession,
 } from '@/lib/os';
+import { getScrollback } from '@/lib/setting';
 import { type Addons, createTerminal } from '@/lib/terminal';
 import { useTheme } from '@/lib/themes';
 import generateTerminalTheme from '@/lib/themes/terminal';
@@ -21,7 +22,11 @@ import {
 	on,
 	onCleanup,
 	onMount,
+	Show,
 } from 'solid-js';
+import ContextMenu from '@/components/terminal/context-menu';
+import HistoryPopup from '@/components/terminal/history';
+import SearchBar from '@/components/terminal/search';
 
 function gcd(a: number, b: number): number {
 	return b === 0 ? a : gcd(b, a % b);
@@ -105,6 +110,13 @@ function Session({ id, active }: SessionProps) {
 		return 20;
 	};
 
+	const [showSearch, setShowSearch] = createSignal(false);
+	const [showHistory, setShowHistory] = createSignal(false);
+	const [contextMenu, setContextMenu] = createSignal<{
+		x: number;
+		y: number;
+	} | null>(null);
+
 	let terminalEl: HTMLDivElement | undefined;
 	let terminal: TerminalProps | undefined;
 
@@ -123,7 +135,13 @@ function Session({ id, active }: SessionProps) {
 				);
 				return;
 			}
-			terminal = await createTerminal(terminalEl, theme(), fontSize());
+			const scrollback = await getScrollback();
+			terminal = await createTerminal(
+				terminalEl,
+				theme(),
+				fontSize(),
+				scrollback,
+			);
 
 			await initializeSession(id);
 
@@ -180,6 +198,21 @@ function Session({ id, active }: SessionProps) {
 		terminal?.term.write(e.payload),
 	);
 
+	function handleSearchShortcut(e: KeyboardEvent) {
+		if (e.ctrlKey && e.key === 'f' && active() === id) {
+			e.preventDefault();
+			setShowSearch(true);
+		}
+		if (e.ctrlKey && e.shiftKey && e.key === 'H' && active() === id) {
+			e.preventDefault();
+			setShowHistory(true);
+		}
+	}
+
+	window.addEventListener('keydown', handleSearchShortcut, {
+		signal: controller.signal,
+	});
+
 	onCleanup(() => {
 		terminal?.term.dispose();
 		unListen.then(f => f()).catch(errorLog);
@@ -187,7 +220,53 @@ function Session({ id, active }: SessionProps) {
 	});
 
 	return (
-		<div class={cn(active() !== id && 'hidden', 'size-full p-2')}>
+		<div
+			class={cn(active() !== id && 'hidden', 'relative size-full p-2')}
+			onContextMenu={e => {
+				e.preventDefault();
+				setContextMenu({ x: e.clientX, y: e.clientY });
+			}}
+		>
+			<Show when={showSearch() && terminal?.addons.search}>
+				{addon => (
+					<SearchBar
+						searchAddon={addon()}
+						onClose={() => {
+							setShowSearch(false);
+							terminal?.term.focus();
+						}}
+					/>
+				)}
+			</Show>
+			<Show when={showHistory() && terminal}>
+				<HistoryPopup
+					onSelect={(cmd: string) => {
+						writeToSession(id, cmd);
+						setShowHistory(false);
+						terminal?.term.focus();
+					}}
+					onClose={() => {
+						setShowHistory(false);
+						terminal?.term.focus();
+					}}
+				/>
+			</Show>
+			<Show when={contextMenu() && terminal ? contextMenu() : null}>
+				{pos => (
+					<ContextMenu
+						x={pos().x}
+						y={pos().y}
+						terminal={terminal?.term as Terminal}
+						sessionId={id}
+						onClose={() => {
+							setContextMenu(null);
+							terminal?.term.focus();
+						}}
+						onSearch={() => setShowSearch(true)}
+						onHistory={() => setShowHistory(true)}
+					/>
+				)}
+			</Show>
 			<div class="size-full" ref={el => (terminalEl = el)} />
 		</div>
 	);

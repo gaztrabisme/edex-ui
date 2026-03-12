@@ -8,7 +8,7 @@ const Content = lazy(async () => {
 
 function System() {
 	return (
-		<div class="relative box-border flex h-full w-[16vw] flex-col items-end sm:px-1 md:px-2 lg:px-3">
+		<div class="relative box-border flex h-full w-[20vw] min-w-[280px] flex-col items-end sm:px-1 md:px-2 lg:px-3">
 			<Banner title={/*@once*/ 'PANEL'} name={/*@once*/ 'SYSTEM'} />
 			<Content />
 		</div>

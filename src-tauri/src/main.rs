@@ -25,6 +25,21 @@ async fn kernel_version() -> Result<String, String> {
         .ok_or_else(|| "Failed to get kernel version".to_string())
 }
 
+#[tauri::command]
+async fn read_history() -> Result<Vec<String>, String> {
+    let home = std::env::var("HOME").map_err(|e| e.to_string())?;
+    let path = std::path::Path::new(&home).join(".bash_history");
+    let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let mut lines: Vec<String> = content
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(|l| l.to_string())
+        .collect();
+    lines.reverse();
+    lines.dedup();
+    Ok(lines)
+}
+
 fn main() {
     let log_level = if cfg!(debug_assertions) {
         LevelFilter::Info
@@ -52,7 +67,7 @@ fn main() {
                 .expect("no main window")
                 .set_focus();
         }))
-        .invoke_handler(tauri::generate_handler![kernel_version])
+        .invoke_handler(tauri::generate_handler![kernel_version, read_history])
         .setup(move |app| {
             let (mut event_processor, process_event_sender) =
                 EventProcessor::new(app.handle().clone());

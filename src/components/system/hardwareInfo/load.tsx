@@ -44,7 +44,8 @@ function Load() {
 				labels: {
 					disabled: true,
 				},
-				yRangeFunction: () => ({ min: 0, max: 100 }),
+				minValue: 0,
+				maxValue: 100,
 			}),
 	);
 
@@ -111,7 +112,7 @@ function Load() {
 				<canvas
 					ref={el => (canvas[0] = el)}
 					height="60"
-					class="border-default/30 my-[0.46vh] h-[4.167vh] w-[70%] border-y-[0.092vh] border-dashed"
+					class="border-default/30 my-[0.46vh] h-[4.167vh] w-[70%] overflow-hidden border-y-[0.092vh] border-dashed"
 				/>
 			</div>
 			<div class="flex w-full flex-row flex-nowrap items-center justify-between">
@@ -126,7 +127,7 @@ function Load() {
 				<canvas
 					ref={el => (canvas[1] = el)}
 					height="60"
-					class="border-default/30 my-[0.46vh] h-[4.167vh] w-[70%] border-y-[0.092vh] border-dashed"
+					class="border-default/30 my-[0.46vh] h-[4.167vh] w-[70%] overflow-hidden border-y-[0.092vh] border-dashed"
 				/>
 			</div>
 		</>

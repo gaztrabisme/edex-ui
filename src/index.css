@@ -200,4 +200,24 @@
 		--color-stroke: rgb(3, 169, 244);
 		--color-shade: #bfbfbf;
 	}
+
+	html[data-theme="daemon"] {
+		/*daemon — cyberpunk neon cyan on dark burgundy*/
+		--bg-main: 33 14 21;
+		--bg-secondary: 20 16 31;
+		--bg-active: 93 244 254;
+		--bg-hover: 93 244 254;
+
+		/* border */
+		--border-default: 93 244 254;
+
+		/* text */
+		--text-main: 93 244 254;
+		--text-active: 33 14 21;
+		--text-hover: 33 14 21;
+
+		/* colors */
+		--color-stroke: rgb(93, 244, 254);
+		--color-shade: #14101f;
+	}
 }

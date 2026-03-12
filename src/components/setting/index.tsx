@@ -1,5 +1,6 @@
 import type { Resource } from 'solid-js';
 import ShowHiddenFileSetting from '@/components/setting/hidden';
+import ScrollbackSetting from '@/components/setting/scrollback';
 import ChangeThemeSelection from '@/components/setting/theme';
 
 interface SettingProps {
@@ -41,6 +42,7 @@ export default function Setting(props: SettingProps) {
 								changeHidden={props.changeHidden}
 							/>
 							<ChangeThemeSelection />
+							<ScrollbackSetting />
 						</div>
 						<h3 class="text-main font-semibold uppercase sm:text-3xl md:text-5xl lg:text-7xl xl:text-9xl">
 							Shortcuts
@@ -57,6 +59,10 @@ export default function Setting(props: SettingProps) {
 							<div class="text-main flex flex-row flex-nowrap justify-between">
 								<span>Close current Terminal</span>
 								<span class="capitalize">Ctrl + w</span>
+							</div>
+							<div class="text-main flex flex-row flex-nowrap justify-between">
+								<span>Command History</span>
+								<span class="capitalize">Ctrl + Shift + h</span>
 							</div>
 						</div>
 					</div>

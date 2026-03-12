@@ -95,6 +95,37 @@ const INTERSTELLAR: Style = {
 	},
 };
 
+const DAEMON: Style = {
+	colors: {
+		main: 'rgb(93, 244, 254)',
+		black: '#200d14',
+		grey: '#14101f',
+		red: '#fb3048',
+		green: '#1ac5b0',
+		yellow: '#fdf500',
+		blue: '#9370db',
+		magenta: '#cb1dcd',
+		cyan: '#ff5048',
+		white: '#28c775',
+		brightBlack: '#355d65',
+		brightRed: '#fb3048',
+		brightGreen: '#1ac5b0',
+		brightYellow: '#fdf500',
+		brightBlue: '#9370db',
+		brightMagenta: '#cb1dcd',
+		brightCyan: '#ff5048',
+		brightWhite: '#28c775',
+	},
+	terminal: {
+		fontFamily: 'Fira Code',
+		cursorStyle: 'block',
+		foreground: '#5df4fe',
+		background: '#210e15',
+		cursor: '#5df4fe',
+		cursorAccent: '#28c775',
+	},
+};
+
 export function selectStyle(theme: Theme) {
 	switch (theme) {
 		case Theme.TRON:
@@ -107,6 +138,8 @@ export function selectStyle(theme: Theme) {
 			return BLADE;
 		case Theme.INTERSTELLAR:
 			return INTERSTELLAR;
+		case Theme.DAEMON:
+			return DAEMON;
 	}
 }
 
@@ -116,4 +149,5 @@ export enum Theme {
 	BLADE = 'BLADE',
 	CYBORG = 'CYBORG',
 	INTERSTELLAR = 'INTERSTELLAR',
+	DAEMON = 'DAEMON',
 }

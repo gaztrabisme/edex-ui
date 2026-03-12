@@ -2,7 +2,7 @@ import { load } from '@tauri-apps/plugin-store';
 import { Theme } from '@/lib/themes/styles';
 
 const store = await load('.settings.dat', {
-	defaults: { showHiddenFile: false, theme: Theme.TRON },
+	defaults: { showHiddenFile: false, theme: Theme.TRON, scrollback: 5000 },
 	autoSave: true,
 });
 
@@ -20,4 +20,12 @@ export async function getTheme(): Promise<Theme> {
 
 export async function setTheme(theme: Theme) {
 	await store.set('theme', theme);
+}
+
+export async function getScrollback(): Promise<number> {
+	return (await store.get<number>('scrollback')) || 5000;
+}
+
+export async function setScrollback(lines: number) {
+	await store.set('scrollback', lines);
 }

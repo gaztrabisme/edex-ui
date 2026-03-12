@@ -1,5 +1,7 @@
 import { ClipboardAddon } from '@xterm/addon-clipboard';
 import { FitAddon } from '@xterm/addon-fit';
+import { ImageAddon } from '@xterm/addon-image';
+import { SearchAddon } from '@xterm/addon-search';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
@@ -15,6 +17,7 @@ const OVERRIDE_KEY_MAP = [
 	{ key: 'Tab', ctrlKey: true },
 	{ key: 'W', ctrlKey: true },
 	{ key: 'T', ctrlKey: true },
+	{ key: 'f', ctrlKey: true },
 ];
 
 const INITIAL_DEFAULT_OPTIONS: ITerminalInitOnlyOptions = {
@@ -26,9 +29,11 @@ export async function createTerminal(
 	terminalContainer: HTMLDivElement,
 	theme: Theme,
 	initialFontSize: number,
+	scrollback?: number,
 ): Promise<TerminalProps> {
 	const term = new Terminal({
 		fontSize: initialFontSize,
+		scrollback: scrollback ?? 5000,
 		...INITIAL_DEFAULT_OPTIONS,
 		...generateTerminalTheme(theme),
 	});
@@ -43,6 +48,19 @@ export async function createTerminal(
 		term.loadAddon(webglAddon);
 	} catch (e) {
 		await warnLog(`WebGL not supported, falling back to canvas. Error: ${e}`);
+	}
+
+	try {
+		const imageAddon = new ImageAddon({
+			enableSizeReports: true,
+			pixelLimit: 16777216,
+			sixelSupport: true,
+			sixelScrolling: true,
+			sixelPaletteLimit: 256,
+		});
+		term.loadAddon(imageAddon);
+	} catch (e) {
+		await warnLog(`ImageAddon failed to load. Error: ${e}`);
 	}
 
 	term.focus();
@@ -62,6 +80,7 @@ function getAddons() {
 		unicode11: new Unicode11Addon(),
 		clipboard: new ClipboardAddon(),
 		webLink: new WebLinksAddon(),
+		search: new SearchAddon(),
 	};
 }
 
@@ -88,6 +107,11 @@ function overrideKeyEvent(term: Terminal) {
 			// paste
 			// https://github.com/xtermjs/xterm.js/issues/2478#issuecomment-2325204572
 			if ((isMac || isLinux) && e.code === 'KeyV') {
+				return false;
+			}
+
+			// command history popup
+			if (isLinux && e.code === 'KeyH') {
 				return false;
 			}
 

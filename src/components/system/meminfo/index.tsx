@@ -60,7 +60,8 @@ function MemInfo() {
 					MEMORY
 				</span>
 				<span class="sm:text-xxxs md:text-xxs opacity-50 lg:text-sm xl:text-lg">
-					{cpuMemoryText()}
+					{cpuMemoryText()}{' '}
+					{memory()?.cpuMemory ? `${memory()!.cpuMemory.ratio}%` : ''}
 				</span>
 			</div>
 			<div class="mb-[0.8vh] grid grid-flow-row grid-cols-[repeat(40,1fr)] grid-rows-[repeat(11,1fr)] gap-[0.23vh] pt-[0.5vh]">
@@ -72,7 +73,7 @@ function MemInfo() {
 					)}
 				</For>
 			</div>
-			<div class="mb-[0.5vh] grid grid-cols-[15%_65%_20%] items-center">
+			<div class="mb-[0.5vh] grid grid-cols-[15%_55%_30%] items-center">
 				<span class="sm:text-xxs m-0 self-center md:text-sm lg:text-lg xl:text-2xl">
 					SWAP
 				</span>
@@ -80,13 +81,13 @@ function MemInfo() {
 					<div
 						class="bg-active relative h-[0.4vh] w-full opacity-60 duration-500 ease-in"
 						style={{
-							width: `${memory()?.cpuMemory?.ratio || 0}%`,
+							width: `${memory()?.cpuMemory?.total ? Math.round((memory()!.cpuMemory.swap / memory()!.cpuMemory.total) * 100) : 0}%`,
 						}}
 					/>
 					<div class="bg-active relative h-[0.25vh] w-full self-center opacity-80" />
 				</div>
 				<span class="sm:text-xxxs md:text-xxs m-0 self-center text-right whitespace-nowrap not-italic opacity-50 lg:text-sm xl:text-lg">
-					{prettyBytes(memory()?.cpuMemory?.swap || 0)}
+					{prettyBytes(memory()?.cpuMemory?.swap || 0)} USED
 				</span>
 			</div>
 			<div class="border-default/30 h-0 w-full border-y border-dashed" />
@@ -96,7 +97,7 @@ function MemInfo() {
 					{gpuMemoryText()}
 				</span>
 			</div>
-			<div class="mb-[0.5vh] grid grid-cols-[80%_20%] items-center">
+			<div class="mb-[0.5vh] grid grid-cols-[70%_30%] items-center">
 				<div class="border-default/80 px1 flex h-3/4 w-full flex-col items-start justify-center border-r-[0.1vh] border-solid">
 					<div
 						class="bg-active relative h-[0.4vh] w-full opacity-60 duration-500 ease-in"
@@ -107,7 +108,8 @@ function MemInfo() {
 					<div class="bg-active relative h-[0.25vh] w-full self-center opacity-80" />
 				</div>
 				<span class="sm:text-xxxs md:text-xxs m-0 self-center text-right whitespace-nowrap not-italic opacity-50 lg:text-sm xl:text-lg">
-					{prettyBytes(memory()?.gpu?.usedMemory || 0)}
+					{prettyBytes(memory()?.gpu?.usedMemory || 0)} (
+					{Math.round(memory()?.gpu?.memoryUsage || 0)}%)
 				</span>
 			</div>
 		</div>
