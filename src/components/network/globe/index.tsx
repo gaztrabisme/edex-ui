@@ -15,6 +15,13 @@ function getBorderColor(): string {
 	return raw ? `rgb(${raw.replace(/ /g, ', ')})` : 'rgb(251, 48, 72)';
 }
 
+interface GlobeMaterial {
+	color: { set: (c: string) => void };
+	emissive: { set: (c: string) => void };
+	emissiveIntensity: number;
+	shininess: number;
+}
+
 function GlobeView() {
 	const { theme } = useTheme();
 	const style = () => selectStyle(theme());
@@ -41,12 +48,8 @@ function GlobeView() {
 			.ringRepeatPeriod(1200);
 
 		// Globe surface matches theme background, unlit (no shading)
-		const globeMaterial = globeInstance.globeMaterial() as {
-			color: { set: (c: string) => void };
-			emissive: { set: (c: string) => void };
-			emissiveIntensity: number;
-			shininess: number;
-		};
+		const globeMaterial =
+			globeInstance.globeMaterial() as unknown as GlobeMaterial;
 		globeMaterial.color.set('#000000');
 		globeMaterial.emissive.set(style().terminal.background);
 		globeMaterial.emissiveIntensity = 1;
@@ -139,9 +142,10 @@ function GlobeView() {
 				const mainColor = style().colors.main;
 				const borderColor = getBorderColor();
 
-				const globeMaterial = globeInstance.globeMaterial() as {
-					emissive: { set: (c: string) => void };
-				};
+				const globeMaterial = globeInstance.globeMaterial() as unknown as Pick<
+					GlobeMaterial,
+					'emissive'
+				>;
 				globeMaterial.emissive.set(style().terminal.background);
 				globeInstance.hexPolygonColor(() => mainColor);
 

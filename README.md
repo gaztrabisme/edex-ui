@@ -1,64 +1,102 @@
-# eDex-UI
+# eDEX-UI
 
-This is a rewrite of project [edex-ui](https://github.com/GitSquared/edex-ui) using [Tauri](https://github.com/tauri-apps/tauri).
+A sci-fi fullscreen terminal emulator and system monitor, rebuilt with modern tech for daily use.
 
-The primary reason for rewriting stems from the original package being archived and exhibiting poor performance, characterized by excessively high CPU usage and high memory usage.
-Furthermore, there is a need to enhance the displayed information with more practical and valuable content for daily usage.
+![screenshot](screenshot.png)
+*DAEMON theme on 32:9 ultrawide (5120x1440)*
 
-Currently, this project only support macOS and Linux since I do not do development on Windows (PR Welcome.).
+## Credits
 
-### Major Change
+This project stands on the shoulders of two great projects:
 
-- No limit on number of terminals
-- Show temperature on major hardware like CPU, GPU and Battery on laptop
-- Remove keyboard as it is useless during daily usage
-- Replace geolocation view with disks view
+- **[GitSquared/edex-ui](https://github.com/GitSquared/edex-ui)** — the original eDEX-UI. A stunning sci-fi terminal that inspired everything here. Built with Electron, now archived.
+- **[zluo01/edex-ui](https://github.com/zluo01/edex-ui)** — the Tauri v2 rewrite that gave this project its foundation. Replaced Electron with Tauri for dramatically better performance (~30MB RAM vs 200-300MB), rewrote the frontend in SolidJS, and modernized the entire stack.
 
-### Followup
+This fork adds ultrawide support, new themes, terminal QoL features, and visual polish on top of zluo01's excellent rewrite.
 
-> PR welcome on new features or bug fix
+## What's Different
 
-- More styling or functions on terminal
-- Add support for styles in the original packages
-- More hardware information support, currently temperature sensors are not supported in M series chip nor AMD GPUs.
+**Layout**
+- Adapted for 32:9 ultrawide monitors (works on 16:9 too)
+- Responsive side panels — `16vw` on standard screens, `20vw` on ultrawides
+
+**Themes**
+- 6 built-in themes: TRON, APOLLO, BLADE, CYBORG, INTERSTELLAR, DAEMON
+- **DAEMON** — Cyberpunk 2077-inspired dual-color scheme (red structure, cyan data)
+
+**Terminal**
+- Font zoom (Ctrl+/Ctrl-)
+- Copy on select
+- CWD in tab titles
+- Clickable file paths (Ctrl+Click)
+- Activity indicator on background tabs
+- Search (Ctrl+F) with theme-aware highlights
+- Right-click context menu
+- Command history popup (Ctrl+Shift+H)
+- Bell flash notification
+- Close confirmation for active processes
+- Tab drag reorder
+- Configurable scrollback (1K-50K lines)
+- Inline images via SIXEL protocol
+
+**Globe**
+- 3D globe with hex polygon countries
+- Live TCP connection arcs with pulsing endpoint rings
+- Geolocated via ip-api.com batch API
+
+**Visual Polish**
+- Boot animation with kernel log scroll and glitch title
+- File browser icons colored by type (code, config, media, archive, etc.)
+- Theme-derived color palette — all colors shift with the active theme
+
+## Tech Stack
+
+| Layer | Tech |
+|-------|------|
+| App framework | Tauri v2 (Rust backend + WebView frontend) |
+| Frontend | SolidJS + TypeScript |
+| Styling | Tailwind CSS v4 + augmented-ui |
+| Terminal | xterm.js v6 + WebGL renderer |
+| PTY | portable-pty (Rust) |
+| System monitoring | sysinfo + nvml-wrapper (NVIDIA GPU) |
+| Charts | SmoothieCharts |
+| Globe | globe.gl (Three.js) |
+| Build | Vite 7 |
 
 ## Build
 
-Since it use Tauri framework, make sure setup environment properly following [guide](https://tauri.app/start/prerequisites/).
+### Prerequisites
+
+- [Tauri v2 prerequisites](https://tauri.app/start/prerequisites/) (Rust, system deps)
+- Node.js 22+ (Vite 7 requirement)
+- pnpm
 
 ### Development
 
-```
+```bash
+pnpm install
 pnpm run dev
 ```
 
 ### Production Build
 
-```
+```bash
 pnpm run build
 ```
 
-#### Debug Build
+### Lint & Format
 
+```bash
+pnpm run check      # biome lint + format
+pnpm run type-check  # tsc --noEmit
 ```
-pnpm run build-debug
-```
 
-## Performance
+## Known Limitations
 
-### MacOS (Intel, M series)
+- GPU monitoring requires NVIDIA (via NVML) — no AMD support yet
+- Linux and macOS only (no Windows support)
+- Requires a real terminal — this is not a web app
 
-On MacOS, it consumes around 1% Total CPU and less than 500Mb memory including webkit memory usage.
+## License
 
-### Linux (Wayland)
-
-~~Due to Tauri use `webkitgtk` on linux, it consumes around 5% Total CPU which majorly caused by poor performance of the dependency.~~
-With latest performance improve, the total CPU is around 0.3% while keeping the memory usage below 200mb on my machine. (If you still see relatively high cpu on idle, it is likely due to the rendering engine you are using which is not sufficient that make it expensive to render html canvas (i.e. CPU flow chart))
-
-## Screenshots
-
-![1](screenshots/screenshot.webp)
-[neofetch](https://github.com/dylanaraps/neofetch) on MacOS
-
-![2](screenshots/screenshot2.webp)
-[fastfetch](https://github.com/fastfetch-cli/fastfetch/) on Fedora
+GPLv3 — same as the original eDEX-UI.
