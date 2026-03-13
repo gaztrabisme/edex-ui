@@ -19,6 +19,10 @@ export async function readHistory(): Promise<string[]> {
 	return invoke('read_history');
 }
 
+export async function hasRunningChildren(sessionId: string): Promise<boolean> {
+	return invoke('has_running_children', { sessionId });
+}
+
 export async function resizeSession(id: string, rows: number, cols: number) {
 	await emit(id, {
 		type: 'Resize',

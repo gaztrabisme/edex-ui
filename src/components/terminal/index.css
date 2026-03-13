@@ -111,3 +111,16 @@
 .activity-dot {
 	animation: pulse-dot 1.5s ease-in-out infinite;
 }
+
+@keyframes bell-flash {
+	0% {
+		box-shadow: inset 0 0 40px rgba(255, 255, 255, 0.15);
+	}
+	100% {
+		box-shadow: none;
+	}
+}
+
+.bell-flash {
+	animation: bell-flash 200ms ease-out;
+}

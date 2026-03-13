@@ -162,6 +162,11 @@ function overrideKeyEvent(term: Terminal) {
 				return false;
 			}
 
+			// clear scrollback
+			if (isLinux && e.code === 'KeyK') {
+				return false;
+			}
+
 			for (const entry of OVERRIDE_KEY_MAP) {
 				if (
 					entry.key.toLowerCase() === e.key.toLowerCase() &&

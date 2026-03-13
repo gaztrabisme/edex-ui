@@ -8,12 +8,13 @@ import {
 	on,
 	onCleanup,
 	onMount,
+	Show,
 } from 'solid-js';
 import Session from '@/components/terminal/session';
 import TerminalSelectionTab from '@/components/terminal/tab';
 import { useTauriEvent } from '@/lib/hooks/useTauriEvent';
 import { errorLog } from '@/lib/log';
-import { terminateSession } from '@/lib/os';
+import { hasRunningChildren, terminateSession } from '@/lib/os';
 import { useTerminal } from '@/lib/terminal';
 import type { FileSystemStatus, TerminalContainer } from '@/models';
 
@@ -35,6 +36,7 @@ function TerminalSection() {
 
 	const [activitySet, setActivitySet] = createSignal<Set<string>>(new Set());
 	const [cwdMap, setCwdMap] = createSignal<Record<string, string>>({});
+	const [showCloseConfirm, setShowCloseConfirm] = createSignal(false);
 
 	function markActivity(id: string) {
 		if (active() !== id) {
@@ -86,7 +88,18 @@ function TerminalSection() {
 
 	createShortcut(
 		['Control', 'W'],
-		() => terminateSession(active()).catch(errorLog),
+		async () => {
+			try {
+				const children = await hasRunningChildren(active());
+				if (children) {
+					setShowCloseConfirm(true);
+				} else {
+					await terminateSession(active());
+				}
+			} catch {
+				await terminateSession(active());
+			}
+		},
 		{ preventDefault: true },
 	);
 
@@ -137,6 +150,18 @@ function TerminalSection() {
 		});
 	}
 
+	function reorderTabs(fromId: string, toId: string) {
+		setTerminals(prev => {
+			const entries = [...prev.entries()];
+			const fromIdx = entries.findIndex(([k]) => k === fromId);
+			const toIdx = entries.findIndex(([k]) => k === toId);
+			if (fromIdx === -1 || toIdx === -1) return prev;
+			const [moved] = entries.splice(fromIdx, 1);
+			entries.splice(toIdx, 0, moved);
+			return new Map(entries);
+		});
+	}
+
 	async function switchTerminal(id: string) {
 		setActive(id);
 	}
@@ -154,6 +179,7 @@ function TerminalSection() {
 					switchTab={switchTerminal}
 					cwdMap={cwdMap}
 					activitySet={activitySet}
+					reorderTabs={reorderTabs}
 				/>
 				<div class="m-0 size-full overflow-hidden">
 					<For each={[...terminals().values()]}>
@@ -161,6 +187,34 @@ function TerminalSection() {
 					</For>
 				</div>
 			</div>
+			<Show when={showCloseConfirm()}>
+				<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+					<div class="border border-default bg-secondary p-6 text-main font-serif">
+						<p class="mb-4">
+							A process is still running in this terminal. Close anyway?
+						</p>
+						<div class="flex justify-end gap-3">
+							<button
+								type="button"
+								class="cursor-pointer border border-default/50 px-4 py-1.5 hover:bg-active hover:text-active"
+								onClick={() => setShowCloseConfirm(false)}
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								class="cursor-pointer border border-default/50 bg-active px-4 py-1.5 text-active hover:opacity-80"
+								onClick={() => {
+									terminateSession(active()).catch(errorLog);
+									setShowCloseConfirm(false);
+								}}
+							>
+								Close
+							</button>
+						</div>
+					</div>
+				</div>
+			</Show>
 		</section>
 	);
 }

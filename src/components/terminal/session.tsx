@@ -178,6 +178,14 @@ function Session({ id, active, onActivity }: SessionProps) {
 				}
 			});
 
+			// Visual bell flash
+			term.onBell(() => {
+				if (terminalEl) {
+					terminalEl.classList.add('bell-flash');
+					setTimeout(() => terminalEl?.classList.remove('bell-flash'), 200);
+				}
+			});
+
 			addEventListener('resize', () => resizeTerminal(id), {
 				signal: controller.signal,
 			});
@@ -240,6 +248,12 @@ function Session({ id, active, onActivity }: SessionProps) {
 		if (e.ctrlKey && e.shiftKey && e.key === 'H') {
 			e.preventDefault();
 			setShowHistory(true);
+		}
+
+		// Clear scrollback
+		if (e.ctrlKey && e.shiftKey && e.key === 'K') {
+			e.preventDefault();
+			terminal?.term.clear();
 		}
 
 		// Font size zoom

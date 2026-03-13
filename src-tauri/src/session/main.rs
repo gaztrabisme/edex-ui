@@ -9,6 +9,9 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Listener};
 use tokio::sync::mpsc;
 
+#[derive(Clone, Default)]
+pub struct SessionPids(pub Arc<DashMap<String, i32>>);
+
 fn construct_cmd() -> CommandBuilder {
     #[cfg(target_os = "macos")]
     let mut cmd = CommandBuilder::new("zsh");
@@ -187,17 +190,20 @@ pub struct PtySessionManager {
     process_event_sender: mpsc::UnboundedSender<ProcessEvent>,
     directory_file_watcher_event_sender: mpsc::UnboundedSender<DirectoryWatcherEvent>,
     active_sessions: Arc<DashMap<String, PtySession>>,
+    session_pids: SessionPids,
 }
 
 impl PtySessionManager {
     pub fn new(
         process_event_sender: mpsc::UnboundedSender<ProcessEvent>,
         directory_file_watcher_event_sender: mpsc::UnboundedSender<DirectoryWatcherEvent>,
+        session_pids: SessionPids,
     ) -> Self {
         Self {
             process_event_sender,
             directory_file_watcher_event_sender,
             active_sessions: Arc::new(DashMap::new()),
+            session_pids,
         }
     }
 
@@ -205,6 +211,7 @@ impl PtySessionManager {
         let active_sessions = self.active_sessions.clone();
         let process_event_sender = self.process_event_sender.clone();
         let directory_file_watcher_sender = self.directory_file_watcher_event_sender.clone();
+        let session_pids = self.session_pids.clone();
         let app_handle_clone = app_handle.clone();
 
         app_handle.listen("manager", move |event| {
@@ -216,6 +223,7 @@ impl PtySessionManager {
                         &process_event_sender,
                         &directory_file_watcher_sender,
                         &app_handle_clone,
+                        &session_pids,
                     );
                 }
                 Ok(PtySessionManagerCommand::Switch { id }) => {
@@ -234,9 +242,11 @@ impl PtySessionManager {
         process_event_sender: &mpsc::UnboundedSender<ProcessEvent>,
         directory_file_watcher_sender: &mpsc::UnboundedSender<DirectoryWatcherEvent>,
         app_handle: &AppHandle,
+        session_pids: &SessionPids,
     ) {
         let active_sessions_inner = active_sessions.clone();
         let directory_watcher_inner = directory_file_watcher_sender.clone();
+        let session_pids_inner = session_pids.clone();
         let id_for_cleanup = id.to_owned();
         let app_handle_for_cleanup = app_handle.clone();
 
@@ -254,6 +264,7 @@ impl PtySessionManager {
                     )
                 }
                 active_sessions_inner.remove(&id_for_cleanup);
+                session_pids_inner.0.remove(&id_for_cleanup);
 
                 // user closed all sessions, we should exit the app now.
                 if active_sessions_inner.is_empty() {
@@ -280,6 +291,7 @@ impl PtySessionManager {
                 }
                 let pid = pty_session.pid();
                 active_sessions.insert(id.to_owned(), pty_session);
+                session_pids.0.insert(id.to_owned(), pid);
 
                 if let Err(e) = directory_file_watcher_sender.send(DirectoryWatcherEvent::Watch {
                     initial: Some(WatcherPayload::new(pid)),

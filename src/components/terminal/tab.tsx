@@ -8,6 +8,7 @@ interface TerminalSelectionTabProps {
 	addTerminal: VoidFunction;
 	cwdMap?: () => Record<string, string>;
 	activitySet?: () => Set<string>;
+	reorderTabs?: (fromId: string, toId: string) => void;
 }
 
 function TerminalSelectionTab(props: TerminalSelectionTabProps) {
@@ -15,6 +16,8 @@ function TerminalSelectionTab(props: TerminalSelectionTabProps) {
 	const [terminalNames, setTerminalNames] = createSignal<
 		Record<string, string>
 	>({});
+	const [draggedId, setDraggedId] = createSignal<string | null>(null);
+	const [dragOverId, setDragOverId] = createSignal<string | null>(null);
 
 	function handleRename(id: string, e: MouseEvent) {
 		e.stopPropagation();
@@ -63,9 +66,46 @@ function TerminalSelectionTab(props: TerminalSelectionTabProps) {
 							class={cn(
 								'bg-active text-main w-full max-w-[15%] min-w-[10%] skew-tab cursor-pointer overflow-hidden text-center -ml-1.5 text-base',
 								props.active() === id() && 'text-active scale-125 font-medium',
+								draggedId() === id() && 'opacity-40',
+								dragOverId() === id() &&
+									draggedId() !== id() &&
+									'border-t-2 border-current',
 							)}
 							style={{
 								'z-index': index * -1,
+							}}
+							draggable={true}
+							onDragStart={e => {
+								e.dataTransfer?.setData('text/plain', id());
+								if (e.dataTransfer) {
+									e.dataTransfer.effectAllowed = 'move';
+								}
+								setDraggedId(id());
+							}}
+							onDragOver={e => {
+								e.preventDefault();
+								if (e.dataTransfer) {
+									e.dataTransfer.dropEffect = 'move';
+								}
+								setDragOverId(id());
+							}}
+							onDragLeave={() => {
+								if (dragOverId() === id()) {
+									setDragOverId(null);
+								}
+							}}
+							onDrop={e => {
+								e.preventDefault();
+								const fromId = e.dataTransfer?.getData('text/plain');
+								if (fromId && fromId !== id()) {
+									props.reorderTabs?.(fromId, id());
+								}
+								setDraggedId(null);
+								setDragOverId(null);
+							}}
+							onDragEnd={() => {
+								setDraggedId(null);
+								setDragOverId(null);
 							}}
 							onMouseDown={() => props.switchTab(id())}
 						>

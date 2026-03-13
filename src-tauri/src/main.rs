@@ -11,7 +11,7 @@ use tauri_plugin_log::{Target, TargetKind};
 
 use crate::event::main::EventProcessor;
 use crate::file::main::DirectoryFileWatcher;
-use crate::session::main::PtySessionManager;
+use crate::session::main::{PtySessionManager, SessionPids};
 use crate::sys::main::SystemMonitor;
 
 /// How often system stats (CPU, GPU, memory, processes) are polled
@@ -30,6 +30,23 @@ async fn kernel_version() -> Result<String, String> {
     System::kernel_version()
         .map(|v| v.chars().take_while(|&ch| ch != '-').collect::<String>())
         .ok_or_else(|| "Failed to get kernel version".to_string())
+}
+
+#[tauri::command]
+async fn has_running_children(
+    session_id: String,
+    state: tauri::State<'_, SessionPids>,
+) -> Result<bool, String> {
+    let pid = state
+        .0
+        .get(&session_id)
+        .map(|entry| *entry.value())
+        .ok_or_else(|| "Session not found".to_string())?;
+    let children_path = format!("/proc/{}/task/{}/children", pid, pid);
+    match std::fs::read_to_string(&children_path) {
+        Ok(content) => Ok(!content.trim().is_empty()),
+        Err(_) => Ok(false),
+    }
 }
 
 #[tauri::command]
@@ -74,8 +91,11 @@ fn main() {
                 .expect("no main window")
                 .set_focus();
         }))
-        .invoke_handler(tauri::generate_handler![kernel_version, read_history])
+        .invoke_handler(tauri::generate_handler![kernel_version, read_history, has_running_children])
         .setup(move |app| {
+            let session_pids = SessionPids::default();
+            app.manage(session_pids.clone());
+
             let (mut event_processor, process_event_sender) =
                 EventProcessor::new(app.handle().clone());
 
@@ -95,6 +115,7 @@ fn main() {
             let mut pty_manager = PtySessionManager::new(
                 process_event_sender.clone(),
                 directory_file_watcher_event_sender.clone(),
+                session_pids,
             );
             pty_manager.start(app.handle().clone());
 
