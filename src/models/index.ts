@@ -33,6 +33,7 @@ export interface MemoryInformation {
 	total: number;
 	used: number;
 	swap: number;
+	swapTotal: number;
 	ratio: number;
 }
 
@@ -65,7 +66,7 @@ export const ONLINE = 'ONLINE';
 export type NETWORK_STATUS = typeof OFFLINE | typeof ONLINE;
 
 export interface NetworkTrafficStatus {
-	receive: number;
+	received: number;
 	transmitted: number;
 	totalReceive: number;
 	totalTransmitted: number;

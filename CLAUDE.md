@@ -14,12 +14,15 @@ A Tauri v2 rewrite of [eDEX-UI](https://github.com/GitSquared/edex-ui) — a ful
 - **augmented-ui** — CSS library for sci-fi clip-path borders
 - **SmoothieCharts** — real-time streaming graphs
 - **TanStack Solid Query** — async data fetching
+- **globe.gl** — 3D globe visualization (Three.js-based)
 
 ### Backend (Rust)
 - **Tauri v2.10** — app framework, IPC between Rust and WebView
 - **portable-pty** — spawns real shell (bash) via pseudo-terminal
 - **sysinfo** — CPU, memory, disk, network, process monitoring
 - **nvml-wrapper** — NVIDIA GPU stats (temp, utilization, VRAM)
+- **procfs** — reads `/proc/net/tcp[6]` for active TCP connections
+- **reqwest** — HTTP client for ip-api.com geolocation
 - **notify** — filesystem watcher (watches terminal CWD)
 - **tokio** — async runtime
 
@@ -32,7 +35,8 @@ src/                          # SolidJS frontend
     terminal/                 # xterm.js terminal with tabs (Ctrl+T/W/Tab)
     filesystem/               # File browser grid, follows terminal CWD
     system/                   # Left panel: clock, sysinfo, CPU/GPU, memory, processes
-    network/                  # Right panel: connection status, traffic, disk usage
+    network/                  # Right panel: 3D globe, connection status, traffic, disk usage
+      globe/                  # globe.gl 3D globe with live TCP connection arcs
     setting/                  # Settings modal (theme picker)
     banner/                   # Section header component
   lib/
@@ -48,6 +52,7 @@ src-tauri/                    # Rust backend
   src/session/main.rs         # PtySessionManager: PTY lifecycle, read/write/resize
   src/file/main.rs            # DirectoryFileWatcher: watches CWD, scans files
   src/event/main.rs           # EventProcessor: central event bus (mpsc -> Tauri emit)
+  src/connections/main.rs     # ConnectionMonitor: TCP connections + IP geolocation
 ```
 
 ## Commands
@@ -73,16 +78,17 @@ pnpm run type-check
 
 ```
 +-------------------+-------------------------------+-------------------+
-|  System (20vw)    |  Terminal (flex-1, ~60vw)     |  Network (20vw)   |
-|  min-w: 280px     |  xterm.js + tabs              |  min-w: 280px     |
-|  Clock, CPU, RAM  |                               |  Traffic, Disk    |
-|  GPU, Processes   |                               |  Status           |
-+-------------------+-------------------------------+-------------------+
-|  Filesystem (full width, 38vh)                                        |
-|  Grid: auto-rows-[10vh] grid-cols-[repeat(auto-fill,minmax(10vh,14vh))]|
-+-----------------------------------------------------------------------+
+|  System (20vw)    |  Terminal (flex-1, ~60vw)     |  Globe (20vw)     |
+|  min-w: 280px     |  xterm.js + tabs              |  3D earth + arcs  |
+|  Clock, CPU, RAM  |                               |  Network Status   |
+|  GPU, Processes   |                               |  Traffic, Disk    |
++-------------------+-------------------------------+                   |
+|  Filesystem (spans system + terminal)             |                   |
+|  Grid: auto-rows-[10vh] ...minmax(10vh,14vh)      |                   |
++---------------------------------------------------+-------------------+
 ```
 
+Right column (Network) spans full viewport height. Globe on top, network content below.
 Side panels use `w-[20vw]` instead of original `16vw` for ultrawide readability.
 Terminal uses `flex-1` instead of fixed `w-[68vw]` to fill remaining space.
 
@@ -92,7 +98,7 @@ Themes defined in `src/index.css` as CSS custom properties under `html[data-them
 Terminal-specific colors in `src/lib/themes/styles.ts`.
 Active theme: **TRON** (cyan `rgb(170, 207, 209)` on dark `#05080d`).
 
-5 built-in themes: TRON, APOLLO, BLADE, CYBORG, INTERSTELLAR.
+6 built-in themes: TRON, APOLLO, BLADE, CYBORG, INTERSTELLAR, DAEMON.
 
 ## IPC Pattern
 
@@ -103,5 +109,5 @@ Active theme: **TRON** (cyan `rgb(170, 207, 209)` on dark `#05080d`).
 
 - SolidJS uses `createSignal`/`createResource`, NOT React hooks
 - Tailwind classes inline, no separate CSS files (except `index.css` for themes)
-- Rust modules: each feature in its own dir (`sys/`, `session/`, `file/`, `event/`) with `mod.rs` + `main.rs`
+- Rust modules: each feature in its own dir (`sys/`, `session/`, `file/`, `event/`, `connections/`) with `mod.rs` + `main.rs`
 - Biome for linting/formatting (not ESLint/Prettier)

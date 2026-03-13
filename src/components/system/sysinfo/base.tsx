@@ -7,7 +7,7 @@ interface BaseInformationProps {
 
 function BaseInformation(props: BaseInformationProps) {
 	return (
-		<div class="box-border flex h-full flex-col items-start justify-end py-[0.925vh]">
+		<div class="box-border flex h-full flex-col items-start justify-center py-[0.925vh]">
 			<span class="m-0 opacity-50 sm:text-xs md:text-base lg:text-xl xl:text-3xl">
 				{props.header}
 			</span>

@@ -202,14 +202,14 @@
 	}
 
 	html[data-theme="daemon"] {
-		/*daemon — cyberpunk neon cyan on dark burgundy*/
+		/*daemon — cyberpunk: red structure, cyan content on dark burgundy*/
 		--bg-main: 33 14 21;
 		--bg-secondary: 20 16 31;
 		--bg-active: 93 244 254;
 		--bg-hover: 93 244 254;
 
-		/* border */
-		--border-default: 93 244 254;
+		/* border — red for structural lines (matching daemon-kde-mk2) */
+		--border-default: 251 48 72;
 
 		/* text */
 		--text-main: 93 244 254;

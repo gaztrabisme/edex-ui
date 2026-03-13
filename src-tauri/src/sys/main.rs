@@ -108,6 +108,8 @@ struct MemoryInfo {
     pub total: f32,
     pub used: f32,
     pub swap: f32,
+    #[serde(rename = "swapTotal")]
+    pub swap_total: f32,
     pub ratio: f32,
 }
 
@@ -124,6 +126,7 @@ fn extract_memory(sys: &System) -> MemoryInfo {
             total: 0.0,
             used: 0.0,
             swap: 0.0,
+            swap_total: 0.0,
             ratio: 0.0,
         };
     }
@@ -134,11 +137,7 @@ fn extract_memory(sys: &System) -> MemoryInfo {
     let used_swap = sys.used_swap() as f32;
     let total_swap = sys.total_swap() as f32;
 
-    let swap_percent = if total_swap > 0.0 {
-        (used_swap / total_swap) * 100.0
-    } else {
-        0.0
-    };
+    let memory_percent = (used_memory / total_memory) * 100.0;
 
     MemoryInfo {
         active: active.round(),
@@ -146,7 +145,8 @@ fn extract_memory(sys: &System) -> MemoryInfo {
         total: total_memory,
         used: used_memory,
         swap: used_swap,
-        ratio: swap_percent.round(),
+        swap_total: total_swap,
+        ratio: memory_percent.round(),
     }
 }
 
@@ -226,10 +226,15 @@ fn get_nvidia_gpu_data() -> GpuUsage {
                         Some(info) => (info.used as f32, info.total as f32),
                         None => (0.0, 0.0),
                     };
-                    let (load, memory_usage) = device
+                    let load = device
                         .utilization_rates()
-                        .map(|rates| (rates.gpu as f32, rates.memory as f32))
-                        .unwrap_or((0.0, 0.0));
+                        .map(|rates| rates.gpu as f32)
+                        .unwrap_or(0.0);
+                    let memory_usage = if total_memory > 0.0 {
+                        (used_memory / total_memory) * 100.0
+                    } else {
+                        0.0
+                    };
 
                     GpuUsage {
                         name,

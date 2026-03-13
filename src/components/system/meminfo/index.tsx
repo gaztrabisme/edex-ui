@@ -81,7 +81,7 @@ function MemInfo() {
 					<div
 						class="bg-active relative h-[0.4vh] w-full opacity-60 duration-500 ease-in"
 						style={{
-							width: `${memory()?.cpuMemory?.total ? Math.round((memory()!.cpuMemory.swap / memory()!.cpuMemory.total) * 100) : 0}%`,
+							width: `${memory()?.cpuMemory?.swapTotal ? Math.round((memory()!.cpuMemory.swap / memory()!.cpuMemory.swapTotal) * 100) : 0}%`,
 						}}
 					/>
 					<div class="bg-active relative h-[0.25vh] w-full self-center opacity-80" />

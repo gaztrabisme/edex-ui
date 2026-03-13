@@ -14,7 +14,7 @@ const NetworkContent = lazy(async () => {
 function Network() {
 	return (
 		<div class="border-default/30 relative box-border flex h-screen w-[20vw] min-w-[280px] flex-col items-end sm:px-1 md:px-2 lg:px-3">
-			<Banner title={'PANEL'} name={'NETWORK'} />
+			<Banner title={'NETWORK'} name={''} />
 			<GlobeView />
 			<NetworkContent />
 		</div>
