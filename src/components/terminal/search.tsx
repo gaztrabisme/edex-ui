@@ -1,6 +1,35 @@
 import type { SearchAddon } from '@xterm/addon-search';
 import { createSignal, onCleanup, onMount } from 'solid-js';
 
+/** Read a CSS custom property containing an RGB triplet (e.g. "170 207 209")
+ *  and return a hex color string with optional alpha (0-255). */
+function themeHex(varName: string, alpha = 255): string {
+	const raw = getComputedStyle(document.documentElement)
+		.getPropertyValue(varName)
+		.trim();
+	const [r, g, b] = raw.split(/\s+/).map(Number);
+	const hex = (n: number) => n.toString(16).padStart(2, '0');
+	return alpha >= 255
+		? `#${hex(r)}${hex(g)}${hex(b)}`
+		: `#${hex(r)}${hex(g)}${hex(b)}${hex(alpha)}`;
+}
+
+function getSearchDecorations() {
+	const match = themeHex('--text-main', 0x40);
+	const matchBorder = themeHex('--text-main', 0x60);
+	const matchFull = themeHex('--text-main');
+	const active = themeHex('--bg-active', 0x80);
+	const activeFull = themeHex('--bg-active');
+	return {
+		matchBackground: match,
+		matchBorder: matchBorder,
+		matchOverviewRuler: matchFull,
+		activeMatchBackground: active,
+		activeMatchBorder: activeFull,
+		activeMatchColorOverviewRuler: activeFull,
+	};
+}
+
 interface SearchBarProps {
 	searchAddon: SearchAddon;
 	onClose: () => void;
@@ -11,6 +40,8 @@ function SearchBar(props: SearchBarProps) {
 
 	const [query, setQuery] = createSignal('');
 	const [matchInfo, setMatchInfo] = createSignal('');
+
+	const searchDecorations = getSearchDecorations();
 
 	const resultsDisposable = props.searchAddon.onDidChangeResults(e => {
 		if (e.resultCount > 0) {
@@ -36,15 +67,6 @@ function SearchBar(props: SearchBarProps) {
 			decorations: searchDecorations,
 		});
 	}
-
-	const searchDecorations = {
-		matchBackground: '#ffff0040',
-		matchBorder: '#ffff0060',
-		matchOverviewRuler: '#ffff00',
-		activeMatchBackground: '#ff880080',
-		activeMatchBorder: '#ff8800',
-		activeMatchColorOverviewRuler: '#ff8800',
-	};
 
 	function handleInput(value: string) {
 		setQuery(value);
