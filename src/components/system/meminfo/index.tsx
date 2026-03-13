@@ -56,7 +56,7 @@ function MemInfo() {
 				</span>
 				<span class="sm:text-xxxs md:text-xxs opacity-50 lg:text-sm xl:text-lg">
 					{cpuMemoryText()}{' '}
-					{memory()?.cpuMemory ? `${memory()!.cpuMemory.ratio}%` : ''}
+					{memory()?.cpuMemory ? `${memory()?.cpuMemory.ratio}%` : ''}
 				</span>
 			</div>
 			<div class="mb-[0.8vh] grid grid-flow-row grid-cols-[repeat(40,1fr)] grid-rows-[repeat(11,1fr)] gap-[0.23vh] pt-[0.5vh]">
@@ -76,7 +76,7 @@ function MemInfo() {
 					<div
 						class="bg-active relative h-[0.4vh] w-full opacity-60 duration-500 ease-in"
 						style={{
-							width: `${memory()?.cpuMemory?.swapTotal ? Math.round((memory()!.cpuMemory.swap / memory()!.cpuMemory.swapTotal) * 100) : 0}%`,
+							width: `${memory()?.cpuMemory?.swapTotal ? Math.round(((memory()?.cpuMemory.swap ?? 0) / (memory()?.cpuMemory.swapTotal ?? 1)) * 100) : 0}%`,
 						}}
 					/>
 					<div class="bg-active relative h-[0.25vh] w-full self-center opacity-80" />

@@ -18,7 +18,7 @@ export default function generateTerminalTheme(theme: Theme): ITerminalOptions {
 		fontWeightBold: 'bold',
 		letterSpacing: 0,
 		lineHeight: 1,
-		scrollback: 10e6,
+		// scrollback is set per-session via createTerminal(), not here
 		theme: {
 			foreground: style.terminal.foreground,
 			background: style.terminal.background,

@@ -3,7 +3,7 @@
     windows_subsystem = "windows"
 )]
 
-use log::{info, LevelFilter};
+use log::{info, warn, LevelFilter};
 use std::time::Duration;
 use sysinfo::System;
 use tauri::Manager;
@@ -45,7 +45,10 @@ async fn has_running_children(
     let children_path = format!("/proc/{}/task/{}/children", pid, pid);
     match std::fs::read_to_string(&children_path) {
         Ok(content) => Ok(!content.trim().is_empty()),
-        Err(_) => Ok(false),
+        Err(e) => {
+            log::debug!("Could not read children for pid {}: {}", pid, e);
+            Ok(false)
+        }
     }
 }
 
@@ -105,10 +108,11 @@ fn main() {
                 .build(),
         )
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            let _ = app
-                .get_webview_window("main")
-                .expect("no main window")
-                .set_focus();
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_focus();
+            } else {
+                warn!("Single instance callback: main window not found");
+            }
         }))
         .invoke_handler(tauri::generate_handler![kernel_version, read_history, has_running_children])
         .setup(move |app| {
@@ -152,5 +156,8 @@ fn main() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("error while running edex");
+        .unwrap_or_else(|e| {
+            eprintln!("Fatal: failed to run eDEX-UI: {}", e);
+            std::process::exit(1);
+        });
 }

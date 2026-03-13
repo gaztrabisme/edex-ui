@@ -1,4 +1,4 @@
-import { createSignal, onMount, Show } from 'solid-js';
+import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 
 const BOOT_LINES = [
 	'eDEX-UI Kernel v4.2.1-edex — Initializing...',
@@ -124,11 +124,11 @@ export default function BootAnimation(props: BootAnimationProps) {
 
 		runLog();
 
-		return () => {
+		onCleanup(() => {
 			cancelled = true;
 			document.removeEventListener('keydown', handleSkip);
 			document.removeEventListener('click', handleSkip);
-		};
+		});
 	});
 
 	return (

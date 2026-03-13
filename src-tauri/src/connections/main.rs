@@ -144,7 +144,7 @@ impl ConnectionMonitor {
     async fn fetch_user_location(&self) -> (f64, f64) {
         match self
             .http_client
-            // ip-api.com free tier requires HTTP (HTTPS needs pro subscription)
+            // ip-api.com free tier requires HTTP (HTTPS is pro-only)
             .get("http://ip-api.com/json/?fields=status,lat,lon")
             .send()
             .await
@@ -223,7 +223,7 @@ impl ConnectionMonitor {
 
             match self
                 .http_client
-                // ip-api.com free tier requires HTTP (HTTPS needs pro subscription)
+                // ip-api.com free tier requires HTTP (HTTPS is pro-only)
                 .post("http://ip-api.com/batch")
                 .json(&batch_body)
                 .send()
