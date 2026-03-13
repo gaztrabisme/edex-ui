@@ -1,3 +1,4 @@
+import { openPath } from '@tauri-apps/plugin-opener';
 import { ClipboardAddon } from '@xterm/addon-clipboard';
 import { FitAddon } from '@xterm/addon-fit';
 import { ImageAddon } from '@xterm/addon-image';
@@ -18,6 +19,9 @@ const OVERRIDE_KEY_MAP = [
 	{ key: 'W', ctrlKey: true },
 	{ key: 'T', ctrlKey: true },
 	{ key: 'f', ctrlKey: true },
+	{ key: '=', ctrlKey: true },
+	{ key: '-', ctrlKey: true },
+	{ key: '0', ctrlKey: true },
 ];
 
 const INITIAL_DEFAULT_OPTIONS: ITerminalInitOnlyOptions = {
@@ -42,6 +46,49 @@ export async function createTerminal(
 	Object.values(addons).forEach(addon => term.loadAddon(addon));
 
 	term.open(terminalContainer);
+
+	term.registerLinkProvider({
+		provideLinks(bufferLineNumber, callback) {
+			const line = term.buffer.active.getLine(bufferLineNumber);
+			if (!line) {
+				callback(undefined);
+				return;
+			}
+			const text = line.translateToString();
+			const regex = /(\/[\w.+\-@][\w.+\-@/]*)/g;
+			const links: Array<{
+				range: {
+					start: { x: number; y: number };
+					end: { x: number; y: number };
+				};
+				text: string;
+				activate: (_event: MouseEvent, text: string) => void;
+			}> = [];
+			for (
+				let match = regex.exec(text);
+				match !== null;
+				match = regex.exec(text)
+			) {
+				const path = match[1];
+				if (path.length < 2) continue;
+				const startX = match.index + 1;
+				links.push({
+					range: {
+						start: { x: startX, y: bufferLineNumber + 1 },
+						end: {
+							x: startX + path.length - 1,
+							y: bufferLineNumber + 1,
+						},
+					},
+					text: path,
+					activate: (_event: MouseEvent, linkText: string) => {
+						openPath(linkText);
+					},
+				});
+			}
+			callback(links.length > 0 ? links : undefined);
+		},
+	});
 
 	try {
 		const webglAddon = new WebglAddon();

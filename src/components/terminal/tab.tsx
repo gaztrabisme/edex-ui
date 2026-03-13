@@ -1,4 +1,4 @@
-import { createSignal, Index, Match, Switch } from 'solid-js';
+import { createSignal, Index, Match, Show, Switch } from 'solid-js';
 import { cn } from '@/lib/utils';
 
 interface TerminalSelectionTabProps {
@@ -6,6 +6,8 @@ interface TerminalSelectionTabProps {
 	terminalIds: () => string[];
 	switchTab: (id: string) => void;
 	addTerminal: VoidFunction;
+	cwdMap?: () => Record<string, string>;
+	activitySet?: () => Set<string>;
 }
 
 function TerminalSelectionTab(props: TerminalSelectionTabProps) {
@@ -39,7 +41,17 @@ function TerminalSelectionTab(props: TerminalSelectionTabProps) {
 	}
 
 	function getName(id: string, index: number) {
-		return terminalNames()[id] || `#${index}`;
+		const customName = terminalNames()[id];
+		if (customName) return customName;
+		const cwd = props.cwdMap?.()[id];
+		if (cwd) {
+			return cwd.split('/').filter(Boolean).pop() || cwd;
+		}
+		return `#${index}`;
+	}
+
+	function hasActivity(id: string) {
+		return props.activitySet?.().has(id) ?? false;
 	}
 
 	return (
@@ -63,6 +75,9 @@ function TerminalSelectionTab(props: TerminalSelectionTabProps) {
 									props.active() === id() && 'bg-active',
 								)}
 							>
+								<Show when={hasActivity(id())}>
+									<span class="activity-dot mr-1.5 size-2 shrink-0 rounded-full bg-current" />
+								</Show>
 								<Switch
 									fallback={
 										<>

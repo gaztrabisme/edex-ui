@@ -96,19 +96,23 @@ function useScreenWidth(): Accessor<number> {
 	return screenWidth;
 }
 
+const FONT_SIZE_MIN = 8;
+const FONT_SIZE_MAX = 32;
+
 interface SessionProps {
 	id: string;
 	active: Accessor<string>;
+	onActivity?: (id: string) => void;
 }
 
-function Session({ id, active }: SessionProps) {
+function Session({ id, active, onActivity }: SessionProps) {
 	const { theme } = useTheme();
 
 	const controller = new AbortController();
 
 	// fontSize
 	const screenWidth = useScreenWidth();
-	const fontSize = () => {
+	const baseFontSize = () => {
 		if (screenWidth() < FONT_SIZE_BREAKPOINT_SM) {
 			return FONT_SIZE_SM;
 		} else if (screenWidth() < FONT_SIZE_BREAKPOINT_MD) {
@@ -118,6 +122,13 @@ function Session({ id, active }: SessionProps) {
 		}
 		return FONT_SIZE_XL;
 	};
+
+	const [fontSizeOffset, setFontSizeOffset] = createSignal(0);
+	const fontSize = () =>
+		Math.max(
+			FONT_SIZE_MIN,
+			Math.min(FONT_SIZE_MAX, baseFontSize() + fontSizeOffset()),
+		);
 
 	const [showSearch, setShowSearch] = createSignal(false);
 	const [showHistory, setShowHistory] = createSignal(false);
@@ -157,6 +168,15 @@ function Session({ id, active }: SessionProps) {
 			await resize(id, terminal.term, terminal.addons);
 
 			terminal.term.onData(v => writeToSession(id, v));
+
+			// Copy on select
+			const term = terminal.term;
+			term.onSelectionChange(() => {
+				const sel = term.getSelection();
+				if (sel) {
+					navigator.clipboard.writeText(sel);
+				}
+			});
 
 			addEventListener('resize', () => resizeTerminal(id), {
 				signal: controller.signal,
@@ -203,22 +223,48 @@ function Session({ id, active }: SessionProps) {
 		}),
 	);
 
-	const unListen = listen(`data-${id}`, (e: Event<string>) =>
-		terminal?.term.write(e.payload),
-	);
+	const unListen = listen(`data-${id}`, (e: Event<string>) => {
+		terminal?.term.write(e.payload);
+		if (active() !== id && onActivity) {
+			onActivity(id);
+		}
+	});
 
-	function handleSearchShortcut(e: KeyboardEvent) {
-		if (e.ctrlKey && e.key === 'f' && active() === id) {
+	function handleKeyboardShortcuts(e: KeyboardEvent) {
+		if (active() !== id) return;
+
+		if (e.ctrlKey && e.key === 'f') {
 			e.preventDefault();
 			setShowSearch(true);
 		}
-		if (e.ctrlKey && e.shiftKey && e.key === 'H' && active() === id) {
+		if (e.ctrlKey && e.shiftKey && e.key === 'H') {
 			e.preventDefault();
 			setShowHistory(true);
 		}
+
+		// Font size zoom
+		if (e.ctrlKey && (e.key === '=' || e.key === '+')) {
+			e.preventDefault();
+			if (fontSize() < FONT_SIZE_MAX) {
+				setFontSizeOffset(prev => prev + 1);
+				resizeTerminal(id);
+			}
+		}
+		if (e.ctrlKey && e.key === '-') {
+			e.preventDefault();
+			if (fontSize() > FONT_SIZE_MIN) {
+				setFontSizeOffset(prev => prev - 1);
+				resizeTerminal(id);
+			}
+		}
+		if (e.ctrlKey && e.key === '0') {
+			e.preventDefault();
+			setFontSizeOffset(0);
+			resizeTerminal(id);
+		}
 	}
 
-	window.addEventListener('keydown', handleSearchShortcut, {
+	window.addEventListener('keydown', handleKeyboardShortcuts, {
 		signal: controller.signal,
 	});
 

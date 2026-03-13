@@ -11,10 +11,11 @@ import {
 } from 'solid-js';
 import Session from '@/components/terminal/session';
 import TerminalSelectionTab from '@/components/terminal/tab';
+import { useTauriEvent } from '@/lib/hooks/useTauriEvent';
 import { errorLog } from '@/lib/log';
 import { terminateSession } from '@/lib/os';
 import { useTerminal } from '@/lib/terminal';
-import type { TerminalContainer } from '@/models';
+import type { FileSystemStatus, TerminalContainer } from '@/models';
 
 import './index.css';
 
@@ -32,6 +33,26 @@ function TerminalSection() {
 
 	const terminalIds = () => [...terminals().keys()];
 
+	const [activitySet, setActivitySet] = createSignal<Set<string>>(new Set());
+	const [cwdMap, setCwdMap] = createSignal<Record<string, string>>({});
+
+	function markActivity(id: string) {
+		if (active() !== id) {
+			setActivitySet(prev => {
+				if (prev.has(id)) return prev;
+				const next = new Set(prev);
+				next.add(id);
+				return next;
+			});
+		}
+	}
+
+	// Track CWD from filesystem events
+	useTauriEvent<FileSystemStatus>('files', payload => {
+		const currentActive = active();
+		setCwdMap(prev => ({ ...prev, [currentActive]: payload.path }));
+	});
+
 	onMount(() => {
 		addTerminal();
 	});
@@ -42,6 +63,13 @@ function TerminalSection() {
 			if (item) {
 				item.scrollIntoView({ behavior: 'smooth', inline: 'center' });
 			}
+			// Clear activity indicator for newly active tab
+			setActivitySet(prev => {
+				if (!prev.has(active)) return prev;
+				const next = new Set(prev);
+				next.delete(active);
+				return next;
+			});
 		}),
 	);
 
@@ -96,7 +124,13 @@ function TerminalSection() {
 				const newMap = new Map(prevState);
 				newMap.set(id, {
 					id,
-					terminal: () => <Session id={/* @once */ id} active={active} />,
+					terminal: () => (
+						<Session
+							id={/* @once */ id}
+							active={active}
+							onActivity={markActivity}
+						/>
+					),
 				});
 				return newMap;
 			});
@@ -118,6 +152,8 @@ function TerminalSection() {
 					active={active}
 					terminalIds={terminalIds}
 					switchTab={switchTerminal}
+					cwdMap={cwdMap}
+					activitySet={activitySet}
 				/>
 				<div class="m-0 size-full overflow-hidden">
 					<For each={[...terminals().values()]}>
