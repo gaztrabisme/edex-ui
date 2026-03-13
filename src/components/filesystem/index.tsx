@@ -27,7 +27,7 @@ function FileSystem() {
 
 	return (
 		<>
-			<div class="relative flex size-full max-h-[38vh] flex-col justify-between sm:p-1 md:p-2 lg:p-3">
+			<div class="relative flex size-full max-h-[38vh] flex-col justify-between border-default/20 border-t sm:p-1 md:p-2 lg:p-3">
 				<Banner
 					title={/*@once*/ 'FILESYSTEM'}
 					name={fileSystem()?.path || ''}

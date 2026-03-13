@@ -34,7 +34,11 @@ function GlobeView() {
 			.arcStroke(0.5)
 			.arcDashLength(0.4)
 			.arcDashGap(0.2)
-			.arcDashAnimateTime(1500);
+			.arcDashAnimateTime(1500)
+			.ringColor('color')
+			.ringMaxRadius(3)
+			.ringPropagationSpeed(2)
+			.ringRepeatPeriod(1200);
 
 		// Globe surface matches theme background, unlit (no shading)
 		const globeMaterial = globeInstance.globeMaterial() as {
@@ -116,9 +120,17 @@ function GlobeView() {
 		}));
 
 		globeInstance.arcsData(arcs).arcColor('color');
+
+		// Pulsing rings at connection endpoints for glow effect
+		const rings = data.connections.map(conn => ({
+			lat: conn.lat,
+			lng: conn.lon,
+			color: borderColor,
+		}));
+		globeInstance.ringsData(rings);
 	});
 
-	// Theme reactivity — update hex color, atmosphere, points, arcs
+	// Theme reactivity — update hex color, atmosphere, points, arcs, rings
 	createEffect(
 		on(
 			() => theme(),
@@ -156,13 +168,26 @@ function GlobeView() {
 						currentArcs.map(a => ({ ...a, color: borderColor })),
 					);
 				}
+				const currentRings = globeInstance.ringsData() as Array<{
+					lat: number;
+					lng: number;
+					color: string;
+				}>;
+				if (currentRings.length > 0) {
+					globeInstance.ringsData(
+						currentRings.map(r => ({ ...r, color: borderColor })),
+					);
+				}
 			},
 		),
 	);
 
-	// biome-ignore lint/style/noNonNullAssertion: SolidJS definite assignment pattern
 	return (
-		<div ref={containerRef!} class="w-full min-h-0 flex-1 overflow-hidden" />
+		<div
+			// biome-ignore lint/style/noNonNullAssertion: SolidJS definite assignment pattern
+			ref={containerRef!}
+			class="w-full min-h-0 flex-1 overflow-hidden"
+		/>
 	);
 }
 
