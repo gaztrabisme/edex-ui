@@ -13,10 +13,14 @@ use tokio::sync::mpsc;
 pub struct SessionPids(pub Arc<DashMap<String, i32>>);
 
 fn construct_cmd() -> CommandBuilder {
-    #[cfg(target_os = "macos")]
-    let mut cmd = CommandBuilder::new("zsh");
-    #[cfg(target_os = "linux")]
-    let mut cmd = CommandBuilder::new("bash");
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| {
+        if cfg!(target_os = "macos") {
+            "/bin/zsh".to_string()
+        } else {
+            "/bin/bash".to_string()
+        }
+    });
+    let mut cmd = CommandBuilder::new(&shell);
 
     cmd.args(&["-l"]);
     cmd.env("TERM", "xterm-256color");

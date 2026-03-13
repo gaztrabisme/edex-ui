@@ -52,12 +52,31 @@ async fn has_running_children(
 #[tauri::command]
 async fn read_history() -> Result<Vec<String>, String> {
     let home = std::env::var("HOME").map_err(|e| e.to_string())?;
-    let path = std::path::Path::new(&home).join(".bash_history");
+    let home_path = std::path::Path::new(&home);
+
+    // Try zsh history first, fall back to bash history
+    let (path, is_zsh) = {
+        let zsh_path = home_path.join(".zsh_history");
+        if zsh_path.exists() {
+            (zsh_path, true)
+        } else {
+            (home_path.join(".bash_history"), false)
+        }
+    };
+
     let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
     let mut lines: Vec<String> = content
         .lines()
         .filter(|l| !l.is_empty())
-        .map(|l| l.to_string())
+        .map(|l| {
+            if is_zsh {
+                // Zsh extended history format: ": timestamp:0;command"
+                l.find(';').map_or(l, |pos| &l[pos + 1..]).to_string()
+            } else {
+                l.to_string()
+            }
+        })
+        .filter(|l| !l.is_empty())
         .collect();
     lines.reverse();
     lines.dedup();
