@@ -1,12 +1,24 @@
 import type { GlobeInstance } from 'globe.gl';
 import Globe from 'globe.gl';
-import { createEffect, on, onCleanup, onMount } from 'solid-js';
+import {
+	createEffect,
+	createSignal,
+	on,
+	onCleanup,
+	onMount,
+	Show,
+} from 'solid-js';
 import { useTauriEvent } from '@/lib/hooks/useTauriEvent';
 import { selectStyle, useTheme } from '@/lib/themes';
 import type { ConnectionsData } from '@/models';
 
 const COUNTRIES_GEOJSON_URL =
 	'https://cdn.jsdelivr.net/npm/globe.gl/example/datasets/ne_110m_admin_0_countries.geojson';
+
+/** Max retries for GeoJSON CDN fetch */
+const GEOJSON_MAX_RETRIES = 2;
+/** Delay between retries in ms */
+const GEOJSON_RETRY_DELAY = 5000;
 
 function getBorderColor(): string {
 	const raw = getComputedStyle(document.documentElement)
@@ -27,6 +39,8 @@ function GlobeView() {
 	const style = () => selectStyle(theme());
 	let containerRef!: HTMLDivElement;
 	let globeInstance: GlobeInstance | undefined;
+	const [hasConnections, setHasConnections] = createSignal(false);
+	const [receivedFirstData, setReceivedFirstData] = createSignal(false);
 
 	onMount(() => {
 		const mainColor = style().colors.main;
@@ -55,19 +69,8 @@ function GlobeView() {
 		globeMaterial.emissiveIntensity = 1;
 		globeMaterial.shininess = 0;
 
-		// Load country GeoJSON and render as hex polygons
-		fetch(COUNTRIES_GEOJSON_URL)
-			.then(res => res.json())
-			.then(countries => {
-				if (!globeInstance) return;
-				globeInstance
-					.hexPolygonsData(countries.features)
-					.hexPolygonResolution(3)
-					.hexPolygonMargin(0.35)
-					.hexPolygonUseDots(false)
-					.hexPolygonColor(() => mainColor)
-					.hexPolygonAltitude(0.005);
-			});
+		// Load country GeoJSON with retry
+		loadGeoJSON(globeInstance, mainColor, 0);
 
 		// Auto-rotate, allow spinning but no zoom/pan
 		const controls = globeInstance.controls();
@@ -94,9 +97,39 @@ function GlobeView() {
 		});
 	});
 
+	function loadGeoJSON(globe: GlobeInstance, color: string, attempt: number) {
+		fetch(COUNTRIES_GEOJSON_URL)
+			.then(res => {
+				if (!res.ok) throw new Error(`HTTP ${res.status}`);
+				return res.json();
+			})
+			.then(countries => {
+				if (!globe) return;
+				globe
+					.hexPolygonsData(countries.features)
+					.hexPolygonResolution(3)
+					.hexPolygonMargin(0.35)
+					.hexPolygonUseDots(false)
+					.hexPolygonColor(() => color)
+					.hexPolygonAltitude(0.005);
+			})
+			.catch(() => {
+				if (attempt < GEOJSON_MAX_RETRIES) {
+					setTimeout(
+						() => loadGeoJSON(globe, color, attempt + 1),
+						GEOJSON_RETRY_DELAY,
+					);
+				}
+				// Globe still works without countries — just no hex polygons
+			});
+	}
+
 	// Listen for connection data from Rust backend
 	useTauriEvent<ConnectionsData>('connections', data => {
 		if (!globeInstance) return;
+
+		setReceivedFirstData(true);
+		setHasConnections(data.connections.length > 0);
 
 		// User location as a glowing point
 		const borderColor = getBorderColor();
@@ -187,11 +220,23 @@ function GlobeView() {
 	);
 
 	return (
-		<div
-			// biome-ignore lint/style/noNonNullAssertion: SolidJS definite assignment pattern
-			ref={containerRef!}
-			class="w-full min-h-0 flex-1 overflow-hidden"
-		/>
+		<div class="relative w-full min-h-0 flex-1 overflow-hidden">
+			<div
+				// biome-ignore lint/style/noNonNullAssertion: SolidJS definite assignment pattern
+				ref={containerRef!}
+				class="h-full w-full"
+			/>
+			<Show when={receivedFirstData() && !hasConnections()}>
+				<div class="pointer-events-none absolute inset-0 flex items-center justify-center">
+					<span
+						class="text-main no-connection-pulse font-united_sans_medium tracking-[0.35em] uppercase"
+						style={{ 'font-size': 'clamp(0.6rem, 1vw, 1.1rem)' }}
+					>
+						NO CONNECTION
+					</span>
+				</div>
+			</Show>
+		</div>
 	);
 }
 

@@ -1,6 +1,8 @@
 import { createSignal, Show } from 'solid-js';
 import BootAnimation from '@/components/boot';
 import '@/components/boot/index.css';
+import PanelErrorBoundary from '@/components/error-boundary';
+import '@/components/error-boundary/index.css';
 import FileSystem from '@/components/filesystem';
 import Network from '@/components/network';
 import System from '@/components/system';
@@ -20,12 +22,20 @@ function App() {
 			>
 				<div class="flex min-w-0 flex-1 flex-col overflow-hidden">
 					<div class="flex h-[62vh] w-full shrink-0 flex-row flex-nowrap overflow-hidden">
-						<System />
-						<Terminal />
+						<PanelErrorBoundary name="SYSTEM">
+							<System />
+						</PanelErrorBoundary>
+						<PanelErrorBoundary name="TERMINAL">
+							<Terminal />
+						</PanelErrorBoundary>
 					</div>
-					<FileSystem />
+					<PanelErrorBoundary name="FILESYSTEM">
+						<FileSystem />
+					</PanelErrorBoundary>
 				</div>
-				<Network />
+				<PanelErrorBoundary name="NETWORK">
+					<Network />
+				</PanelErrorBoundary>
 			</div>
 		</>
 	);

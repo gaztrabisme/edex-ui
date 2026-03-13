@@ -1,0 +1,31 @@
+/* Sci-fi pulsing text for error states */
+@keyframes panel-error-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.3;
+	}
+}
+.panel-error-pulse {
+	animation: panel-error-pulse 2s ease-in-out infinite;
+}
+
+/* Pulsing text for NO CONNECTION overlay */
+@keyframes no-connection-pulse {
+	0%,
+	100% {
+		opacity: 0.9;
+		text-shadow:
+			0 0 8px currentColor,
+			0 0 20px currentColor;
+	}
+	50% {
+		opacity: 0.3;
+		text-shadow: 0 0 4px currentColor;
+	}
+}
+.no-connection-pulse {
+	animation: no-connection-pulse 2.5s ease-in-out infinite;
+}
