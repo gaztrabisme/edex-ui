@@ -29,31 +29,25 @@ function GlobeView() {
 			.arcDashGap(0.2)
 			.arcDashAnimateTime(1500);
 
-		// Dark globe surface — no texture, just a dark material
+		// Globe surface matches theme background, unlit (no shading)
 		const globeMaterial = globeInstance.globeMaterial() as {
 			color: { set: (c: string) => void };
 			emissive: { set: (c: string) => void };
 			emissiveIntensity: number;
-			opacity: number;
-			transparent: boolean;
+			shininess: number;
 		};
-		globeMaterial.color.set('#080808');
-		globeMaterial.emissive.set('#000000');
-		globeMaterial.emissiveIntensity = 0;
-		globeMaterial.opacity = 0.9;
-		globeMaterial.transparent = true;
+		globeMaterial.color.set('#000000');
+		globeMaterial.emissive.set(style().terminal.background);
+		globeMaterial.emissiveIntensity = 1;
+		globeMaterial.shininess = 0;
 
 		// Load country GeoJSON and render as hex polygons
 		fetch(COUNTRIES_GEOJSON_URL)
 			.then(res => res.json())
 			.then(countries => {
 				if (!globeInstance) return;
-				const features = countries.features.filter(
-					(f: { properties: { ISO_A2: string } }) =>
-						f.properties.ISO_A2 !== 'AQ',
-				);
 				globeInstance
-					.hexPolygonsData(features)
+					.hexPolygonsData(countries.features)
 					.hexPolygonResolution(3)
 					.hexPolygonMargin(0.35)
 					.hexPolygonUseDots(false)
@@ -130,6 +124,10 @@ function GlobeView() {
 				if (!globeInstance) return;
 				const mainColor = style().colors.main;
 
+				const globeMaterial = globeInstance.globeMaterial() as {
+					emissive: { set: (c: string) => void };
+				};
+				globeMaterial.emissive.set(style().terminal.background);
 				globeInstance.hexPolygonColor(() => mainColor);
 
 				const currentPoints = globeInstance.pointsData() as Array<{
