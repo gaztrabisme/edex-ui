@@ -86,12 +86,23 @@ async function resize(id: string, term: Terminal, addons: Addons) {
 	}
 }
 
-function useScreenWidth(): Accessor<number> {
+function useScreenWidth(onResize?: () => void): Accessor<number> {
 	const [screenWidth, setScreenWidth] = createSignal(window.innerWidth);
 
-	const handler = () => setScreenWidth(window.innerWidth);
+	let rafId = 0;
+	const handler = () => {
+		if (rafId) return;
+		rafId = requestAnimationFrame(() => {
+			rafId = 0;
+			setScreenWidth(window.innerWidth);
+			onResize?.();
+		});
+	};
 	window.addEventListener('resize', handler);
-	onCleanup(() => window.removeEventListener('resize', handler));
+	onCleanup(() => {
+		window.removeEventListener('resize', handler);
+		if (rafId) cancelAnimationFrame(rafId);
+	});
 
 	return screenWidth;
 }
@@ -110,8 +121,8 @@ function Session({ id, active, onActivity }: SessionProps) {
 
 	const controller = new AbortController();
 
-	// fontSize
-	const screenWidth = useScreenWidth();
+	// fontSize — useScreenWidth also handles terminal resize via RAF-debounced callback
+	const screenWidth = useScreenWidth(() => resizeTerminal(id));
 	const baseFontSize = () => {
 		if (screenWidth() < FONT_SIZE_BREAKPOINT_SM) {
 			return FONT_SIZE_SM;
@@ -184,10 +195,6 @@ function Session({ id, active, onActivity }: SessionProps) {
 					terminalEl.classList.add('bell-flash');
 					setTimeout(() => terminalEl?.classList.remove('bell-flash'), 200);
 				}
-			});
-
-			addEventListener('resize', () => resizeTerminal(id), {
-				signal: controller.signal,
 			});
 
 			terminal.term.focus();

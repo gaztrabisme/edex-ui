@@ -8,6 +8,22 @@ export default defineConfig({
   clearScreen: false,
   build: {
     target: 'esnext',
+    reportCompressedSize: false,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('globe.gl') || id.includes('three-globe') || id.includes('node_modules/three/')) {
+            return 'three-globe';
+          }
+          if (id.includes('@xterm/')) {
+            return 'xterm';
+          }
+          if (id.includes('smoothie')) {
+            return 'smoothie';
+          }
+        },
+      },
+    },
   },
   server: {
     port: 1874,

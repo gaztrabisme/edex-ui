@@ -1,5 +1,5 @@
 import prettyBytes from 'pretty-bytes';
-import { createSignal, For } from 'solid-js';
+import { createMemo, createSignal, For } from 'solid-js';
 import { useTauriEvent } from '@/lib/hooks/useTauriEvent';
 import { cn } from '@/lib/utils';
 import type { GPUData, MemoryInformation, SystemData } from '@/models';
@@ -22,19 +22,28 @@ function MemInfo() {
 		}),
 	);
 
-	const getCellOpacityClass = (index: number) => {
+	const cellOpacityMap = createMemo(() => {
 		const mem = memory();
-		if (!mem) return 'opacity-25';
+		const map = new Map<number, string>();
+		if (!mem) {
+			for (let i = 0; i < MEMORY_GRID_SIZE; i++) {
+				map.set(i, 'opacity-25');
+			}
+			return map;
+		}
 
 		const active = mem.cpuMemory.active;
 		const available = mem.cpuMemory.available;
 		const availableStart = MEMORY_GRID_SIZE - active - available;
 		const activeStart = MEMORY_GRID_SIZE - active;
 
-		if (index >= activeStart) return 'opacity-100';
-		if (index >= availableStart) return 'opacity-50';
-		return 'opacity-25';
-	};
+		for (let i = 0; i < MEMORY_GRID_SIZE; i++) {
+			if (i >= activeStart) map.set(i, 'opacity-100');
+			else if (i >= availableStart) map.set(i, 'opacity-50');
+			else map.set(i, 'opacity-25');
+		}
+		return map;
+	});
 
 	const cpuMemoryText = () => {
 		const mem = memory();
@@ -63,7 +72,7 @@ function MemInfo() {
 				<For each={MEMORY_INDICES}>
 					{index => (
 						<div
-							class={cn('bg-active size-[0.2vh]', getCellOpacityClass(index))}
+							class={cn('bg-active size-[0.2vh]', cellOpacityMap().get(index))}
 						/>
 					)}
 				</For>

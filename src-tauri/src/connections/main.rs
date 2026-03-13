@@ -43,7 +43,7 @@ struct GeoApiResponse {
 
 pub struct ConnectionMonitor {
     refresh_interval: Duration,
-    event_tx: mpsc::UnboundedSender<ProcessEvent>,
+    event_tx: mpsc::Sender<ProcessEvent>,
     geo_cache: HashMap<IpAddr, GeoLocation>,
     user_location: Option<(f64, f64)>,
     http_client: reqwest::Client,
@@ -73,7 +73,7 @@ fn is_public_ip(ip: &IpAddr) -> bool {
 }
 
 impl ConnectionMonitor {
-    pub fn new(refresh_interval: Duration, event_tx: mpsc::UnboundedSender<ProcessEvent>) -> Self {
+    pub fn new(refresh_interval: Duration, event_tx: mpsc::Sender<ProcessEvent>) -> Self {
         let http_client = reqwest::Client::builder()
             .timeout(GEOLOCATION_TIMEOUT)
             .build()
@@ -136,8 +136,14 @@ impl ConnectionMonitor {
     }
 
     fn send_event(&self, event: ProcessEvent) {
-        if let Err(e) = self.event_tx.send(event) {
-            error!("Failed to send event: {}", e);
+        match self.event_tx.try_send(event) {
+            Ok(()) => {}
+            Err(mpsc::error::TrySendError::Full(_)) => {
+                warn!("Event channel full, dropping connections event");
+            }
+            Err(mpsc::error::TrySendError::Closed(_)) => {
+                error!("Event channel closed, cannot send connections event");
+            }
         }
     }
 
@@ -201,13 +207,23 @@ impl ConnectionMonitor {
     }
 
     async fn batch_geolocate(&mut self, ips: &[IpAddr]) {
-        // Evict cache if it exceeds the size limit
+        // Partial eviction: remove ~100 entries when cache is full instead of clearing everything
         if self.geo_cache.len() >= GEO_CACHE_MAX_SIZE {
+            let evict_count = 100.min(self.geo_cache.len());
             info!(
-                "Geo cache reached {} entries, clearing to prevent unbounded growth",
-                self.geo_cache.len()
+                "Geo cache reached {} entries, evicting {} to make room",
+                self.geo_cache.len(),
+                evict_count,
             );
-            self.geo_cache.clear();
+            let keys_to_remove: Vec<IpAddr> = self
+                .geo_cache
+                .keys()
+                .take(evict_count)
+                .cloned()
+                .collect();
+            for key in keys_to_remove {
+                self.geo_cache.remove(&key);
+            }
         }
 
         for chunk in ips.chunks(GEOLOCATION_BATCH_SIZE) {

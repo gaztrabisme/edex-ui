@@ -2,15 +2,23 @@ import { QueryClient, queryOptions } from '@tanstack/solid-query';
 import { errorLog } from '@/lib/log';
 import type { IPAddressInformation, IPInformation } from '@/models';
 
-export const QUERY_CLIENT = new QueryClient();
+export const QUERY_CLIENT = new QueryClient({
+	defaultOptions: {
+		queries: {
+			gcTime: 5 * 60 * 1000,
+			staleTime: 60 * 1000,
+		},
+	},
+});
 
 export const ipInformationQueryOptions = (enabled: boolean) =>
 	queryOptions({
 		queryKey: ['ipInfo'],
 		queryFn: getIPInformation,
-		refetchInterval: 5000,
+		refetchInterval: 60000,
 		refetchIntervalInBackground: false,
-		refetchOnWindowFocus: true,
+		refetchOnWindowFocus: false,
+		staleTime: 15000,
 		retry: false,
 		enabled,
 	});
@@ -59,9 +67,10 @@ export const latencyQueryOptions = (enabled: boolean) =>
 	queryOptions({
 		queryKey: ['latency'],
 		queryFn: getNetworkLatency,
-		refetchInterval: 1000,
+		refetchInterval: 30000,
 		refetchIntervalInBackground: false,
-		refetchOnWindowFocus: true,
+		refetchOnWindowFocus: false,
+		staleTime: 15000,
 		enabled,
 		retry: false,
 	});

@@ -3,8 +3,22 @@ import { createSignal, For } from 'solid-js';
 import { useTauriEvent } from '@/lib/hooks/useTauriEvent';
 import type { DiskUsageStatus } from '@/models';
 
-function deepEqual<T>(a: T, b: T): boolean {
-	return JSON.stringify(a) === JSON.stringify(b);
+function disksEqual(
+	a: DiskUsageStatus[] | undefined,
+	b: DiskUsageStatus[],
+): boolean {
+	if (!a || a.length !== b.length) return false;
+	for (let i = 0; i < a.length; i++) {
+		if (
+			a[i].name !== b[i].name ||
+			a[i].total !== b[i].total ||
+			a[i].available !== b[i].available ||
+			a[i].usage !== b[i].usage ||
+			a[i].internal !== b[i].internal
+		)
+			return false;
+	}
+	return true;
 }
 
 function DiskUsage() {
@@ -12,7 +26,7 @@ function DiskUsage() {
 
 	useTauriEvent<DiskUsageStatus[]>('disk', payload =>
 		setDisks(prevState =>
-			deepEqual(prevState, payload) ? prevState : payload,
+			disksEqual(prevState, payload) ? prevState : payload,
 		),
 	);
 

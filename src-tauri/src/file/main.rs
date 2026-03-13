@@ -1,10 +1,10 @@
 use crate::event::main::ProcessEvent;
-use log::error;
+use log::{error, warn};
 use notify::{recommended_watcher, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::AtomicI32;
-use std::sync::{atomic, Arc};
-use std::time::Duration;
+use std::sync::{atomic, Arc, Mutex as StdMutex};
+use std::time::{Duration, Instant};
 use std::{
     cmp::Ordering,
     fs,
@@ -121,9 +121,13 @@ impl DirectoryInfo {
     }
 }
 
+/// Debounce interval for file watcher events — coalesces rapid filesystem
+/// changes into a single directory rescan.
+const FILE_WATCHER_DEBOUNCE: Duration = Duration::from_millis(500);
+
 fn scan_directory(path: &Path) -> Result<DirectoryInfo, Box<dyn std::error::Error + Send + Sync>> {
     let entries = fs::read_dir(path)?;
-    let mut file_info_list: Vec<FileInfo> = Vec::new();
+    let mut file_info_list: Vec<FileInfo> = Vec::with_capacity(64);
 
     for entry in entries.flatten() {
         let file_name = entry.file_name();
@@ -250,12 +254,12 @@ impl PtyCwdWatcher {
 
 pub struct DirectoryFileWatcher {
     directory_file_watcher_receiver: mpsc::UnboundedReceiver<DirectoryWatcherEvent>,
-    process_event_sender: mpsc::UnboundedSender<ProcessEvent>,
+    process_event_sender: mpsc::Sender<ProcessEvent>,
 }
 
 impl DirectoryFileWatcher {
     pub fn new(
-        event_tx: mpsc::UnboundedSender<ProcessEvent>,
+        event_tx: mpsc::Sender<ProcessEvent>,
     ) -> (Self, mpsc::UnboundedSender<DirectoryWatcherEvent>) {
         let (tx, rx) = mpsc::unbounded_channel();
 
@@ -269,16 +273,36 @@ impl DirectoryFileWatcher {
 
     pub async fn run(&mut self) {
         let file_watcher_event_sender = self.process_event_sender.clone();
+        // Debounce: track last scan time so rapid file events only trigger one rescan
+        let last_scan_time = Arc::new(StdMutex::new(Instant::now() - FILE_WATCHER_DEBOUNCE));
+        let debounce_state = Arc::clone(&last_scan_time);
         let file_path_watcher =
             match recommended_watcher(move |res: notify::Result<notify::Event>| match res {
                 Ok(event) => {
                     if event.kind.is_create() || event.kind.is_modify() || event.kind.is_remove() {
                         if let Some(path) = event.paths.first() {
                             if let Some(parent) = path.parent() {
-                                Self::update_directory(
-                                    parent,
-                                    &file_watcher_event_sender,
-                                );
+                                // Debounce: skip if last scan was less than 500ms ago
+                                let should_scan = match debounce_state.lock() {
+                                    Ok(mut last) => {
+                                        if last.elapsed() >= FILE_WATCHER_DEBOUNCE {
+                                            *last = Instant::now();
+                                            true
+                                        } else {
+                                            false
+                                        }
+                                    }
+                                    Err(e) => {
+                                        warn!("Failed to lock debounce state: {}", e);
+                                        true // scan anyway if lock is poisoned
+                                    }
+                                };
+                                if should_scan {
+                                    Self::update_directory(
+                                        parent,
+                                        &file_watcher_event_sender,
+                                    );
+                                }
                             }
                         }
                     }
@@ -312,11 +336,17 @@ impl DirectoryFileWatcher {
         }
     }
 
-    fn update_directory(path: &Path, event_tx: &mpsc::UnboundedSender<ProcessEvent>) {
+    fn update_directory(path: &Path, event_tx: &mpsc::Sender<ProcessEvent>) {
         match scan_directory(path) {
             Ok(directory_info) => {
-                if let Err(e) = event_tx.send(ProcessEvent::Directory { directory_info }) {
-                    error!("Fail to update files. {:?}", e);
+                match event_tx.try_send(ProcessEvent::Directory { directory_info }) {
+                    Ok(()) => {}
+                    Err(mpsc::error::TrySendError::Full(_)) => {
+                        warn!("Event channel full, dropping directory update event");
+                    }
+                    Err(mpsc::error::TrySendError::Closed(_)) => {
+                        error!("Event channel closed, cannot send directory update");
+                    }
                 }
             }
             Err(e) => error!("Fail to scan directory. Error: {}", e),

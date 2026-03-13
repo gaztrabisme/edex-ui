@@ -377,11 +377,27 @@ fn extract_process(sys: &System) -> Vec<ProcessInfo> {
             run_time: process.run_time(),
     }));
 
-    processes.sort_by(|a, b| {
-        b.cpu_usage
-            .partial_cmp(&a.cpu_usage)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    // Partial sort: O(n) average to find top 10 by CPU usage, vs O(n log n) for full sort
+    if processes.len() > 10 {
+        processes.select_nth_unstable_by(9, |a, b| {
+            b.cpu_usage
+                .partial_cmp(&a.cpu_usage)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        processes.truncate(10);
+        // Sort the top 10 for stable display order
+        processes.sort_by(|a, b| {
+            b.cpu_usage
+                .partial_cmp(&a.cpu_usage)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+    } else {
+        processes.sort_by(|a, b| {
+            b.cpu_usage
+                .partial_cmp(&a.cpu_usage)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+    }
 
     processes
 }
@@ -453,11 +469,11 @@ pub struct SystemMonitor {
     disks: Disks,
     components: Components,
     refresh_interval: Duration,
-    event_tx: mpsc::UnboundedSender<ProcessEvent>,
+    event_tx: mpsc::Sender<ProcessEvent>,
 }
 
 impl SystemMonitor {
-    pub fn new(refresh_interval: Duration, event_tx: mpsc::UnboundedSender<ProcessEvent>) -> Self {
+    pub fn new(refresh_interval: Duration, event_tx: mpsc::Sender<ProcessEvent>) -> Self {
         let system = System::new_with_specifics(
             RefreshKind::nothing()
                 .with_memory(MemoryRefreshKind::everything())
@@ -483,9 +499,11 @@ impl SystemMonitor {
 
     pub async fn run(&mut self) {
         let mut interval = tokio::time::interval(self.refresh_interval);
+        let mut tick_count: u64 = 0;
 
         loop {
             interval.tick().await;
+            tick_count = tick_count.wrapping_add(1);
 
             // refresh_specifics avg ~84ms — acceptable to run on the async thread directly rather than
             // spawn_blocking, because this monitor loop runs in its own dedicated tauri::async_runtime::spawn
@@ -497,40 +515,63 @@ impl SystemMonitor {
                     .with_processes(ProcessRefreshKind::nothing().with_cpu().with_memory()),
             );
 
-            // Refresh separate modules
+            // Refresh networks every tick (1s)
             self.networks.refresh(true);
-            self.disks
-                .refresh_specifics(true, DiskRefreshKind::everything().without_io_usage()); // refresh_list = true to detect new/removed disks
-            self.components.refresh(true);
 
-            let process_data = extract_process(&self.system);
+            // Refresh components (temperature sensors) every 5s
+            let refresh_components = tick_count % 5 == 1;
+            if refresh_components {
+                self.components.refresh(true);
+            }
+
+            // Refresh disks every 10s
+            let refresh_disks = tick_count % 10 == 1;
+            if refresh_disks {
+                self.disks
+                    .refresh_specifics(true, DiskRefreshKind::everything().without_io_usage());
+            }
+
+            let top_processes = extract_process(&self.system);
             let memory = extract_memory(&self.system);
             let cpu = extract_cpu_data(&self.system, &self.components);
             let gpu = extract_gpu_data(&self.system, &self.components);
             let network_data = extract_network(&self.networks);
-            let disks_data = extract_disk_usage(&self.disks);
 
-            // Take top 10 by CPU usage for the system panel without extra cloning
-            let top_processes: Vec<ProcessInfo> = process_data.iter().take(10).cloned().collect();
-
+            // extract_process already returns top 10 via partial sort
             let system_data = SystemData {
                 uptime: System::uptime(),
                 memory,
                 cpu,
                 gpu,
-                processes: top_processes,
+                processes: top_processes.clone(),
             };
 
             self.send_event(ProcessEvent::System { system_data }, "system");
             self.send_event(ProcessEvent::Network { network_data }, "network");
-            self.send_event(ProcessEvent::Disks { disks_data }, "disks");
-            self.send_event(ProcessEvent::Process { process_data }, "process");
+            self.send_event(
+                ProcessEvent::Process {
+                    process_data: top_processes,
+                },
+                "process",
+            );
+
+            // Only send disk/component events when they actually refresh
+            if refresh_disks {
+                let disks_data = extract_disk_usage(&self.disks);
+                self.send_event(ProcessEvent::Disks { disks_data }, "disks");
+            }
         }
     }
 
     fn send_event(&self, event: ProcessEvent, event_type: &str) {
-        if let Err(e) = self.event_tx.send(event) {
-            error!("Failed to send {} data: {}", event_type, e);
+        match self.event_tx.try_send(event) {
+            Ok(()) => {}
+            Err(mpsc::error::TrySendError::Full(_)) => {
+                warn!("Event channel full, dropping {} event", event_type);
+            }
+            Err(mpsc::error::TrySendError::Closed(_)) => {
+                error!("Event channel closed, cannot send {} data", event_type);
+            }
         }
     }
 }

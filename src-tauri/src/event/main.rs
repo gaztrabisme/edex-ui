@@ -9,6 +9,11 @@ use tokio::sync::mpsc;
 const DESTROY_TERMINAL: &str = "destroy";
 const UPDATE_FILES: &str = "files";
 
+/// Capacity of the bounded event channel. Large enough to absorb bursts
+/// from simultaneous system monitor + PTY output without backpressure,
+/// but bounded to prevent unbounded memory growth.
+const EVENT_CHANNEL_CAPACITY: usize = 1024;
+
 //TODO: Redesign event later.
 #[derive(Debug, Clone)]
 pub enum ProcessEvent {
@@ -18,18 +23,18 @@ pub enum ProcessEvent {
     Process { process_data: Vec<ProcessInfo> },
     Directory { directory_info: DirectoryInfo },
     Connections { connections_data: ConnectionsData },
-    Forward { id: String, data: Vec<u8> }, // Handle Pty Message forwarding
+    // PTY output now emits directly from reader thread (bypasses event channel)
     ProcessExit { id: String, exit_code: Option<u32> }, // Handle Pty Session Exits
 }
 
 pub struct EventProcessor {
-    event_rx: mpsc::UnboundedReceiver<ProcessEvent>,
+    event_rx: mpsc::Receiver<ProcessEvent>,
     app_handle: AppHandle,
 }
 
 impl EventProcessor {
-    pub fn new(app_handle: AppHandle) -> (Self, mpsc::UnboundedSender<ProcessEvent>) {
-        let (tx, rx) = mpsc::unbounded_channel();
+    pub fn new(app_handle: AppHandle) -> (Self, mpsc::Sender<ProcessEvent>) {
+        let (tx, rx) = mpsc::channel(EVENT_CHANNEL_CAPACITY);
 
         let processor = Self {
             event_rx: rx,
@@ -47,9 +52,6 @@ impl EventProcessor {
 
     fn handle_event(&self, event: ProcessEvent) {
         match event {
-            ProcessEvent::Forward { id, data } => {
-                self.forward_pty_message(id, &data);
-            }
             ProcessEvent::ProcessExit { id, exit_code } => {
                 self.handle_close(id, exit_code);
             }
@@ -70,16 +72,6 @@ impl EventProcessor {
             }
             ProcessEvent::Connections { connections_data } => {
                 self.send_data("connections", connections_data);
-            }
-        }
-    }
-
-    // Forward output to external systems (websockets, files, etc.)
-    fn forward_pty_message(&self, id: String, data: &[u8]) {
-        if !data.is_empty() {
-            let event_name = format!("data-{}", id);
-            if let Err(e) = self.app_handle.emit(&event_name, data) {
-                error!("Fail to send {} data. Error: {}", event_name, e);
             }
         }
     }

@@ -29,39 +29,43 @@ function NetworkTraffic(props: NetworkTrafficProps): JSX.Element {
 		setTraffic(payload),
 	);
 
-	const charts: SmoothieChart[] = Array.from(
-		{ length: 2 },
-		(_, i) =>
-			new SmoothieChart({
-				limitFPS: 40,
-				responsive: true,
-				millisPerPixel: 70,
-				interpolation: 'linear',
-				grid: {
-					millisPerLine: 5000,
-					fillStyle: 'transparent',
-					strokeStyle: `${style().colors.main.replace('rgb', 'rgba').replace(')', ', 0.15)')}`,
-					verticalSections: 3,
-					borderVisible: false,
-				},
-				labels: {
-					disabled: true,
-				},
-				minValue: i === 0 ? 0 : undefined,
-				maxValue: i === 1 ? 0 : undefined,
-			}),
-	);
-
-	const timeSeriesOptions = {
-		lineWidth: 2.5,
-		strokeStyle: style().colors.main,
-	};
-
-	const series: TimeSeries[] = [new TimeSeries(), new TimeSeries()];
-
-	charts.forEach((v, i) => v.addTimeSeries(series[i], timeSeriesOptions));
+	let charts: SmoothieChart[] = [];
+	let series: TimeSeries[] = [];
 
 	onMount(() => {
+		const currentStyle = style();
+
+		charts = Array.from(
+			{ length: 2 },
+			(_, i) =>
+				new SmoothieChart({
+					limitFPS: 40,
+					responsive: true,
+					millisPerPixel: 70,
+					interpolation: 'linear',
+					grid: {
+						millisPerLine: 5000,
+						fillStyle: 'transparent',
+						strokeStyle: `${currentStyle.colors.main.replace('rgb', 'rgba').replace(')', ', 0.15)')}`,
+						verticalSections: 3,
+						borderVisible: false,
+					},
+					labels: {
+						disabled: true,
+					},
+					minValue: i === 0 ? 0 : undefined,
+					maxValue: i === 1 ? 0 : undefined,
+				}),
+		);
+
+		const timeSeriesOptions = {
+			lineWidth: 2.5,
+			strokeStyle: currentStyle.colors.main,
+		};
+
+		series = [new TimeSeries(), new TimeSeries()];
+
+		charts.forEach((v, i) => v.addTimeSeries(series[i], timeSeriesOptions));
 		charts.forEach((v, i) => v.streamTo(canvas[i], 1000));
 	});
 
@@ -71,7 +75,7 @@ function NetworkTraffic(props: NetworkTrafficProps): JSX.Element {
 
 	createEffect(
 		on(traffic, traffic => {
-			if (!traffic || !props.connected()) {
+			if (!traffic || !props.connected() || series.length === 0) {
 				return;
 			}
 

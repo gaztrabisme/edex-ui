@@ -24,35 +24,38 @@ function Load() {
 		}),
 	);
 
-	const charts: SmoothieChart[] = Array.from(
-		{ length: 2 },
-		() =>
-			new SmoothieChart({
-				limitFPS: 30,
-				responsive: true,
-				millisPerPixel: 50,
-				grid: {
-					fillStyle: 'transparent',
-					strokeStyle: 'transparent',
-					verticalSections: 0,
-					borderVisible: false,
-				},
-				labels: {
-					disabled: true,
-				},
-				minValue: -2,
-				maxValue: 102,
-			}),
-	);
-
+	let charts: SmoothieChart[] = [];
 	const cpuSeries: TimeSeries[] = [];
-	const gpuSeries: TimeSeries = new TimeSeries();
-
-	const timeSeriesOptions = {
-		strokeStyle: style().colors.main,
-	};
+	let gpuSeries: TimeSeries;
+	let seriesStrokeStyle: string;
 
 	onMount(() => {
+		const currentStyle = style();
+		seriesStrokeStyle = currentStyle.colors.main;
+
+		charts = Array.from(
+			{ length: 2 },
+			() =>
+				new SmoothieChart({
+					limitFPS: 30,
+					responsive: true,
+					millisPerPixel: 50,
+					grid: {
+						fillStyle: 'transparent',
+						strokeStyle: 'transparent',
+						verticalSections: 0,
+						borderVisible: false,
+					},
+					labels: {
+						disabled: true,
+					},
+					minValue: -2,
+					maxValue: 102,
+				}),
+		);
+
+		gpuSeries = new TimeSeries();
+
 		charts.forEach((v, i) => v.streamTo(canvas[i], 1000));
 	});
 
@@ -62,10 +65,13 @@ function Load() {
 
 	createEffect(
 		on(data, data => {
-			if (!data) {
+			if (!data || charts.length === 0) {
 				return;
 			}
 			if (!cpuSeries.length) {
+				const timeSeriesOptions = {
+					strokeStyle: seriesStrokeStyle,
+				};
 				cpuSeries.push(
 					...Array.from({ length: data.cpu.core }, () => {
 						const timeSeries = new TimeSeries();

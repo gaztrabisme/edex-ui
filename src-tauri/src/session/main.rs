@@ -9,6 +9,17 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Listener};
 use tokio::sync::mpsc;
 
+/// Larger BufReader buffer for PTY output — reduces syscall frequency.
+/// Default is 8KB; 64KB lets us read larger chunks before emitting.
+const PTY_READ_BUFFER_SIZE: usize = 64 * 1024;
+
+/// Shared writer state so Tauri commands can write directly to PTY sessions
+/// without going through the event system + JSON deserialization.
+type PtyWriter = Arc<Mutex<Box<dyn Write + Send>>>;
+
+#[derive(Clone, Default)]
+pub struct SessionWriters(pub Arc<DashMap<String, PtyWriter>>);
+
 #[derive(Clone, Default)]
 pub struct SessionPids(pub Arc<DashMap<String, i32>>);
 
@@ -52,8 +63,9 @@ struct PtySession {
 impl PtySession {
     pub fn new<F>(
         id: &str,
-        process_event_sender: mpsc::UnboundedSender<ProcessEvent>,
+        process_event_sender: mpsc::Sender<ProcessEvent>,
         app_handle: AppHandle,
+        session_writers: SessionWriters,
         cleanup: F,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>>
     where
@@ -87,56 +99,56 @@ impl PtySession {
 
         // Get reader and writer from master
         let pty_reader = master.try_clone_reader()?;
-        let mut reader = BufReader::new(pty_reader);
+        let mut reader = BufReader::with_capacity(PTY_READ_BUFFER_SIZE, pty_reader);
         let writer = master.take_writer()?;
 
-        // Clone sender for the reader task
-        let pty_reader_sender = process_event_sender.clone();
+        // PTY reader emits directly to frontend — bypasses the shared event channel
+        // so terminal output is never queued behind system monitor events.
+        let app_handle_for_reader = app_handle.clone();
         let id_for_reader = id.to_owned();
 
-        // Spawn reader task to continuously read from PTY
-        // We must use either spawn_blocking  or `tokio::task::yield_now().await` with async spawn,
-        // otherwise, it will prevent mpsc receiver from receiving the event
-        let reader_handle = tauri::async_runtime::spawn_blocking(move || loop {
-            match reader.fill_buf() {
-                Ok(data) if !data.is_empty() => {
-                    let data = data.to_vec();
-                    reader.consume(data.len());
-                    if let Err(e) = pty_reader_sender.send(ProcessEvent::Forward {
-                        id: id_for_reader.clone(),
-                        data,
-                    }) {
-                        error!("Fail to send output. {:?}", e);
+        let reader_handle = tauri::async_runtime::spawn_blocking(move || {
+            // Pre-compute event name once (avoids format!() allocation per read)
+            let event_name = format!("data-{}", id_for_reader);
+            loop {
+                match reader.fill_buf() {
+                    Ok(data) if !data.is_empty() => {
+                        // Emit as string — avoids serde serializing bytes as JSON number array
+                        // ([72,101,108,...] → "Hello..."). Terminal output is text/escape sequences.
+                        let text = String::from_utf8_lossy(data).into_owned();
+                        let len = data.len();
+                        reader.consume(len);
+                        if let Err(e) = app_handle_for_reader.emit(&event_name, &text) {
+                            error!("Failed to emit PTY data for {}: {}", id_for_reader, e);
+                        }
                     }
-                }
-                Ok(_) => {
-                    // ✅ EOF reached - exit loop
-                    break;
-                }
-                Err(e) => {
-                    error!(
-                        "Error when reading from pty for session {}: Error: {}",
-                        id_for_reader, e
-                    );
-                    break;
+                    Ok(_) => break, // EOF
+                    Err(e) => {
+                        error!(
+                            "Error when reading from pty for session {}: Error: {}",
+                            id_for_reader, e
+                        );
+                        break;
+                    }
                 }
             }
         });
 
-        let writer = Mutex::new(writer);
+        // Store writer in shared state so the Tauri command can write directly
+        // (bypasses event system + JSON deserialization for every keystroke)
+        let writer = Arc::new(Mutex::new(
+            Box::new(writer) as Box<dyn Write + Send>
+        ));
+        session_writers.0.insert(id.to_owned(), writer);
+
         let master = Mutex::new(master);
         let killer = Mutex::new(child.clone_killer());
+        // Event listener now only handles Resize and Exit (writes go via command)
         let event_id = app_handle.listen(id, move |event| {
             match serde_json::from_str::<PtySessionCommand>(event.payload()) {
                 Ok(PtySessionCommand::Write { data }) => {
-                    match writer.lock() {
-                        Ok(mut w) => {
-                            if let Err(e) = w.write(data.as_bytes()) {
-                                error!("Failed to write to session: {:?}", e);
-                            }
-                        }
-                        Err(e) => error!("Failed to lock writer mutex: {:?}", e),
-                    }
+                    // Legacy path — kept for compatibility but writes should use the command
+                    warn!("Received Write via event listener (should use command): {}", data.len());
                 }
                 Ok(PtySessionCommand::Resize { cols, rows }) => {
                     let size = PtySize {
@@ -183,11 +195,17 @@ impl PtySession {
             };
             reader_handle.abort();
             app_handle_for_cleanup.unlisten(event_id);
-            if let Err(e) = child_watcher_sender.send(ProcessEvent::ProcessExit {
+            match child_watcher_sender.try_send(ProcessEvent::ProcessExit {
                 id: id_for_exit,
                 exit_code,
             }) {
-                error!("Fail to send process exit event. {:?}", e);
+                Ok(()) => {}
+                Err(mpsc::error::TrySendError::Full(_)) => {
+                    warn!("Event channel full, dropping process exit event");
+                }
+                Err(mpsc::error::TrySendError::Closed(_)) => {
+                    error!("Event channel closed, cannot send process exit event");
+                }
             }
             cleanup();
         });
@@ -208,23 +226,26 @@ enum PtySessionManagerCommand {
 }
 
 pub struct PtySessionManager {
-    process_event_sender: mpsc::UnboundedSender<ProcessEvent>,
+    process_event_sender: mpsc::Sender<ProcessEvent>,
     directory_file_watcher_event_sender: mpsc::UnboundedSender<DirectoryWatcherEvent>,
     active_sessions: Arc<DashMap<String, PtySession>>,
     session_pids: SessionPids,
+    session_writers: SessionWriters,
 }
 
 impl PtySessionManager {
     pub fn new(
-        process_event_sender: mpsc::UnboundedSender<ProcessEvent>,
+        process_event_sender: mpsc::Sender<ProcessEvent>,
         directory_file_watcher_event_sender: mpsc::UnboundedSender<DirectoryWatcherEvent>,
         session_pids: SessionPids,
+        session_writers: SessionWriters,
     ) -> Self {
         Self {
             process_event_sender,
             directory_file_watcher_event_sender,
             active_sessions: Arc::new(DashMap::new()),
             session_pids,
+            session_writers,
         }
     }
 
@@ -233,6 +254,7 @@ impl PtySessionManager {
         let process_event_sender = self.process_event_sender.clone();
         let directory_file_watcher_sender = self.directory_file_watcher_event_sender.clone();
         let session_pids = self.session_pids.clone();
+        let session_writers = self.session_writers.clone();
         let app_handle_clone = app_handle.clone();
 
         app_handle.listen("manager", move |event| {
@@ -245,6 +267,7 @@ impl PtySessionManager {
                         &directory_file_watcher_sender,
                         &app_handle_clone,
                         &session_pids,
+                        &session_writers,
                     );
                 }
                 Ok(PtySessionManagerCommand::Switch { id }) => {
@@ -260,14 +283,16 @@ impl PtySessionManager {
     fn spawn_pty(
         id: &str,
         active_sessions: &Arc<DashMap<String, PtySession>>,
-        process_event_sender: &mpsc::UnboundedSender<ProcessEvent>,
+        process_event_sender: &mpsc::Sender<ProcessEvent>,
         directory_file_watcher_sender: &mpsc::UnboundedSender<DirectoryWatcherEvent>,
         app_handle: &AppHandle,
         session_pids: &SessionPids,
+        session_writers: &SessionWriters,
     ) {
         let active_sessions_inner = active_sessions.clone();
         let directory_watcher_inner = directory_file_watcher_sender.clone();
         let session_pids_inner = session_pids.clone();
+        let session_writers_inner = session_writers.clone();
         let id_for_cleanup = id.to_owned();
         let app_handle_for_cleanup = app_handle.clone();
 
@@ -275,7 +300,9 @@ impl PtySessionManager {
             id,
             process_event_sender.clone(),
             app_handle.clone(),
+            session_writers.clone(),
             move || {
+                session_writers_inner.0.remove(&id_for_cleanup);
                 if let Err(e) =
                     directory_watcher_inner.send(DirectoryWatcherEvent::Watch { initial: None })
                 {

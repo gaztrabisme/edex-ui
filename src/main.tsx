@@ -15,10 +15,12 @@ render(
 			<TerminalProvider>
 				<QueryClientProvider client={QUERY_CLIENT}>
 					<App />
-					<SolidQueryDevtools
-						initialIsOpen={false}
-						buttonPosition="top-right"
-					/>
+					{import.meta.env.DEV && (
+						<SolidQueryDevtools
+							initialIsOpen={false}
+							buttonPosition="top-right"
+						/>
+					)}
 				</QueryClientProvider>
 			</TerminalProvider>
 		</ThemeProvider>

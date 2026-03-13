@@ -9,3 +9,4 @@
 | 005 | 2026-03-13 | Terminal QoL Tier B — bell flash, confirm close, tab drag reorder, clear scrollback | Complete |
 | 006 | 2026-03-13 | Terminal QoL Tier C — zsh, autosuggestions, syntax highlighting, Starship, $SHELL support | Complete |
 | 007 | 2026-03-13 | Boot animation — kernel log scroll, glitch title, skip on keypress | Complete |
+| 008 | 2026-03-13 | Optimization assessment — performance & resource usage across full stack | Complete |

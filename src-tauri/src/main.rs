@@ -11,7 +11,7 @@ use tauri_plugin_log::{Target, TargetKind};
 
 use crate::event::main::EventProcessor;
 use crate::file::main::DirectoryFileWatcher;
-use crate::session::main::{PtySessionManager, SessionPids};
+use crate::session::main::{PtySessionManager, SessionPids, SessionWriters};
 use crate::sys::main::SystemMonitor;
 
 /// How often system stats (CPU, GPU, memory, processes) are polled
@@ -30,6 +30,25 @@ async fn kernel_version() -> Result<String, String> {
     System::kernel_version()
         .map(|v| v.chars().take_while(|&ch| ch != '-').collect::<String>())
         .ok_or_else(|| "Failed to get kernel version".to_string())
+}
+
+/// Direct PTY write via Tauri command — bypasses event system + JSON envelope.
+/// Each keystroke takes the shortest path: invoke → mutex lock → PTY write.
+#[tauri::command]
+fn write_to_session(
+    id: String,
+    data: String,
+    state: tauri::State<'_, SessionWriters>,
+) -> Result<(), String> {
+    if let Some(writer) = state.0.get(&id) {
+        match writer.lock() {
+            Ok(mut w) => {
+                w.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
+            }
+            Err(e) => return Err(format!("Failed to lock writer: {}", e)),
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -114,10 +133,12 @@ fn main() {
                 warn!("Single instance callback: main window not found");
             }
         }))
-        .invoke_handler(tauri::generate_handler![kernel_version, read_history, has_running_children])
+        .invoke_handler(tauri::generate_handler![kernel_version, read_history, has_running_children, write_to_session])
         .setup(move |app| {
             let session_pids = SessionPids::default();
+            let session_writers = SessionWriters::default();
             app.manage(session_pids.clone());
+            app.manage(session_writers.clone());
 
             let (mut event_processor, process_event_sender) =
                 EventProcessor::new(app.handle().clone());
@@ -139,6 +160,7 @@ fn main() {
                 process_event_sender.clone(),
                 directory_file_watcher_event_sender.clone(),
                 session_pids,
+                session_writers,
             );
             pty_manager.start(app.handle().clone());
 

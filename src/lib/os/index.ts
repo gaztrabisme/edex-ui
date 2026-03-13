@@ -34,17 +34,11 @@ export async function resizeSession(id: string, rows: number, cols: number) {
 }
 
 /**
- * Write data from the terminal to the pty
- * @param id terminal id
- * @param data payload
+ * Write data from the terminal to the pty.
+ * Uses Tauri command (invoke) for direct path — bypasses event system + JSON envelope.
  */
-export async function writeToSession(id: string, data: string) {
-	await emit(id, {
-		type: 'Write',
-		payload: {
-			data,
-		},
-	});
+export function writeToSession(id: string, data: string) {
+	invoke('write_to_session', { id, data });
 }
 
 /**
