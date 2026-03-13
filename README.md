@@ -2,7 +2,7 @@
 
 A sci-fi fullscreen terminal emulator and system monitor, rebuilt with modern tech for daily use.
 
-![screenshot](screenshot.png)
+![screenshot](screenshots/screenshot.png)
 *DAEMON theme on 32:9 ultrawide (5120x1440)*
 
 ## Credits
@@ -11,6 +11,7 @@ This project stands on the shoulders of two great projects:
 
 - **[GitSquared/edex-ui](https://github.com/GitSquared/edex-ui)** — the original eDEX-UI. A stunning sci-fi terminal that inspired everything here. Built with Electron, now archived.
 - **[zluo01/edex-ui](https://github.com/zluo01/edex-ui)** — the Tauri v2 rewrite that gave this project its foundation. Replaced Electron with Tauri for dramatically better performance (~30MB RAM vs 200-300MB), rewrote the frontend in SolidJS, and modernized the entire stack.
+- **[eliverlara/daemon-kde-mk2](https://github.com/eliverlara/daemon)** — the KDE theme that inspired the DAEMON color scheme (red structural lines, cyan content on dark burgundy).
 
 This fork adds ultrawide support, new themes, terminal QoL features, and visual polish on top of zluo01's excellent rewrite.
 
