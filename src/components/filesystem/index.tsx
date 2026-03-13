@@ -1,17 +1,13 @@
-import { type Event, listen } from '@tauri-apps/api/event';
-import { createResource, createSignal, lazy, onCleanup } from 'solid-js';
+import { createResource, createSignal, lazy } from 'solid-js';
 import Banner from '@/components/banner';
-import { errorLog } from '@/lib/log';
+import { useTauriEvent } from '@/lib/hooks/useTauriEvent';
 import {
 	getShowHiddenFileStatus,
 	setShowHiddenFileStatus,
 } from '@/lib/setting';
 import type { FileSystemStatus } from '@/models';
 
-const FileSection = lazy(async () => {
-	await new Promise(resolve => setTimeout(resolve, 200));
-	return import('@/components/filesystem/file');
-});
+const FileSection = lazy(() => import('@/components/filesystem/file'));
 
 const Setting = lazy(() => import('@/components/setting'));
 
@@ -27,13 +23,7 @@ function FileSystem() {
 
 	const [fileSystem, setFileSystem] = createSignal<FileSystemStatus>();
 
-	const unListen = listen('files', (e: Event<FileSystemStatus>) =>
-		setFileSystem(e.payload),
-	);
-
-	onCleanup(() => {
-		unListen.then(f => f()).catch(errorLog);
-	});
+	useTauriEvent<FileSystemStatus>('files', payload => setFileSystem(payload));
 
 	return (
 		<>

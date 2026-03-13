@@ -28,6 +28,30 @@ import ContextMenu from '@/components/terminal/context-menu';
 import HistoryPopup from '@/components/terminal/history';
 import SearchBar from '@/components/terminal/search';
 
+/**
+ * GCD of screen width and height, used to detect aspect ratio.
+ * - GCD 100 = 32:9 ultrawide (e.g. 5120x1440 -> 5120/100=51.2, but actually 3200x900 etc.)
+ * - GCD 256 = 16:9 at certain resolutions (e.g. 3840x2160 -> 3840/256=15, 2160/256=8.4...)
+ */
+const SCREEN_GCD_ULTRAWIDE = 100;
+const SCREEN_GCD_16_9 = 256;
+
+/** Extra columns/rows added to fit-addon dimensions to compensate for aspect ratio quirks (see #302) */
+const DEFAULT_EXTRA_COLS = 1;
+const DEFAULT_EXTRA_ROWS = 0;
+const ULTRAWIDE_EXTRA_COLS = 3;
+const ULTRAWIDE_EXTRA_ROWS = 1;
+const WIDESCREEN_EXTRA_COLS = 2;
+
+/** Screen width breakpoints for terminal font size selection */
+const FONT_SIZE_BREAKPOINT_SM = 1920;
+const FONT_SIZE_BREAKPOINT_MD = 2560;
+const FONT_SIZE_BREAKPOINT_LG = 3840;
+const FONT_SIZE_SM = 12;
+const FONT_SIZE_MD = 14;
+const FONT_SIZE_LG = 16;
+const FONT_SIZE_XL = 20;
+
 function gcd(a: number, b: number): number {
 	return b === 0 ? a : gcd(b, a % b);
 }
@@ -41,24 +65,19 @@ async function resize(id: string, term: Terminal, addons: Addons) {
 	let { cols, rows } = fitAddon.proposeDimensions() as ITerminalDimensions;
 
 	// Apply custom fixes based on screen ratio, see #302
-	const w = screen.width;
-	const h = screen.height;
-	let x = 1;
-	let y = 0;
+	const d = gcd(screen.width, screen.height);
+	let extraCols = DEFAULT_EXTRA_COLS;
+	let extraRows = DEFAULT_EXTRA_ROWS;
 
-	const d = gcd(w, h);
-
-	if (d === 100) {
-		y = 1;
-		x = 3;
+	if (d === SCREEN_GCD_ULTRAWIDE) {
+		extraCols = ULTRAWIDE_EXTRA_COLS;
+		extraRows = ULTRAWIDE_EXTRA_ROWS;
+	} else if (d === SCREEN_GCD_16_9) {
+		extraCols = WIDESCREEN_EXTRA_COLS;
 	}
 
-	if (d === 256) {
-		x = 2;
-	}
-
-	cols = cols + x;
-	rows = rows + y;
+	cols = cols + extraCols;
+	rows = rows + extraRows;
 
 	if (term.cols !== cols || term.rows !== rows) {
 		term.resize(cols, rows);
@@ -70,19 +89,9 @@ async function resize(id: string, term: Terminal, addons: Addons) {
 function useScreenWidth(): Accessor<number> {
 	const [screenWidth, setScreenWidth] = createSignal(window.innerWidth);
 
-	const controller = new AbortController();
-
-	window.addEventListener(
-		'resize',
-		() => {
-			setScreenWidth(window.innerWidth);
-		},
-		{
-			signal: controller.signal,
-		},
-	);
-
-	onCleanup(() => controller.abort());
+	const handler = () => setScreenWidth(window.innerWidth);
+	window.addEventListener('resize', handler);
+	onCleanup(() => window.removeEventListener('resize', handler));
 
 	return screenWidth;
 }
@@ -100,14 +109,14 @@ function Session({ id, active }: SessionProps) {
 	// fontSize
 	const screenWidth = useScreenWidth();
 	const fontSize = () => {
-		if (screenWidth() < 1920) {
-			return 12;
-		} else if (screenWidth() < 2560) {
-			return 14;
-		} else if (screenWidth() < 3840) {
-			return 16;
+		if (screenWidth() < FONT_SIZE_BREAKPOINT_SM) {
+			return FONT_SIZE_SM;
+		} else if (screenWidth() < FONT_SIZE_BREAKPOINT_MD) {
+			return FONT_SIZE_MD;
+		} else if (screenWidth() < FONT_SIZE_BREAKPOINT_LG) {
+			return FONT_SIZE_LG;
 		}
-		return 20;
+		return FONT_SIZE_XL;
 	};
 
 	const [showSearch, setShowSearch] = createSignal(false);

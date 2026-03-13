@@ -4,6 +4,7 @@ use notify::{recommended_watcher, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::AtomicI32;
 use std::sync::{atomic, Arc};
+use std::time::Duration;
 use std::{
     cmp::Ordering,
     fs,
@@ -11,6 +12,9 @@ use std::{
     str,
 };
 use tokio::sync::mpsc;
+
+/// How often the PTY current working directory is checked
+const CWD_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 #[cfg(target_os = "linux")]
 pub async fn get_current_pty_cwd(pid: i32) -> Result<String, String> {
@@ -194,7 +198,9 @@ impl PtyCwdWatcher {
 
         tauri::async_runtime::spawn(async move {
             let mut prev_cwd: Option<String> = None;
-            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(1));
+            // Poll-based: /proc/pid/cwd is a procfs symlink that doesn't trigger
+            // inotify/notify events when the shell changes directory.
+            let mut interval = tokio::time::interval(CWD_POLL_INTERVAL);
             loop {
                 interval.tick().await;
 
@@ -203,7 +209,7 @@ impl PtyCwdWatcher {
                     continue;
                 }
 
-                let prev = prev_cwd.clone().unwrap_or_default();
+                let prev = prev_cwd.as_deref().unwrap_or("");
 
                 match get_current_pty_cwd(current_pid).await {
                     Ok(cwd) => {

@@ -1,4 +1,3 @@
-import { type Event, listen } from '@tauri-apps/api/event';
 import prettyBytes from 'pretty-bytes';
 import { SmoothieChart, TimeSeries } from 'smoothie';
 import {
@@ -9,7 +8,7 @@ import {
 	onCleanup,
 	onMount,
 } from 'solid-js';
-import { errorLog } from '@/lib/log';
+import { useTauriEvent } from '@/lib/hooks/useTauriEvent';
 import { selectStyle, useTheme } from '@/lib/themes';
 import { cn } from '@/lib/utils';
 import type { NetworkTrafficStatus } from '@/models';
@@ -22,15 +21,12 @@ function NetworkTraffic(props: NetworkTrafficProps): JSX.Element {
 	const { theme } = useTheme();
 	const style = () => selectStyle(theme());
 
-	const canvas: HTMLCanvasElement[] = [
-		document.createElement('canvas'),
-		document.createElement('canvas'),
-	];
+	const canvas: HTMLCanvasElement[] = [];
 
 	const [traffic, setTraffic] = createSignal<NetworkTrafficStatus>();
 
-	const unListen = listen('network', (e: Event<NetworkTrafficStatus>) =>
-		setTraffic(e.payload),
+	useTauriEvent<NetworkTrafficStatus>('network', payload =>
+		setTraffic(payload),
 	);
 
 	const charts: SmoothieChart[] = Array.from(
@@ -72,7 +68,6 @@ function NetworkTraffic(props: NetworkTrafficProps): JSX.Element {
 	});
 
 	onCleanup(() => {
-		unListen.then(f => f()).catch(errorLog);
 		charts.forEach(o => o.stop());
 	});
 

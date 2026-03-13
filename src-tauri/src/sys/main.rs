@@ -366,10 +366,8 @@ fn extract_process(sys: &System) -> Vec<ProcessInfo> {
         return Vec::new();
     }
 
-    let mut processes: Vec<ProcessInfo> = sys
-        .processes()
-        .iter()
-        .map(|(pid, process)| ProcessInfo {
+    let mut processes: Vec<ProcessInfo> = Vec::with_capacity(sys.processes().len());
+    processes.extend(sys.processes().iter().map(|(pid, process)| ProcessInfo {
             pid: pid.as_u32(),
             name: process.name().to_string_lossy().to_string(),
             cpu_usage: (process.cpu_usage() / core_count).round(),
@@ -377,8 +375,7 @@ fn extract_process(sys: &System) -> Vec<ProcessInfo> {
             state: process.status().to_string(),
             start_time: epoch_to_date(process.start_time()),
             run_time: process.run_time(),
-        })
-        .collect();
+    }));
 
     processes.sort_by(|a, b| {
         b.cpu_usage
@@ -459,7 +456,7 @@ pub struct SystemMonitor {
 }
 
 impl SystemMonitor {
-    pub fn new(refresh_interval_secs: u64, event_tx: mpsc::UnboundedSender<ProcessEvent>) -> Self {
+    pub fn new(refresh_interval: Duration, event_tx: mpsc::UnboundedSender<ProcessEvent>) -> Self {
         let system = System::new_with_specifics(
             RefreshKind::nothing()
                 .with_memory(MemoryRefreshKind::everything())
@@ -478,7 +475,7 @@ impl SystemMonitor {
             networks,
             disks,
             components,
-            refresh_interval: Duration::from_secs(refresh_interval_secs),
+            refresh_interval,
             event_tx,
         }
     }
@@ -512,12 +509,15 @@ impl SystemMonitor {
             let network_data = extract_network(&self.networks);
             let disks_data = extract_disk_usage(&self.disks);
 
+            // Take top 10 by CPU usage for the system panel without extra cloning
+            let top_processes: Vec<ProcessInfo> = process_data.iter().take(10).cloned().collect();
+
             let system_data = SystemData {
                 uptime: System::uptime(),
                 memory,
                 cpu,
                 gpu,
-                processes: process_data.iter().take(10).cloned().collect(),
+                processes: top_processes,
             };
 
             self.send_event(ProcessEvent::System { system_data }, "system");

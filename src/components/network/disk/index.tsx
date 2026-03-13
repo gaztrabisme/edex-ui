@@ -1,22 +1,20 @@
-import { type Event, listen } from '@tauri-apps/api/event';
-import isEqual from 'lodash-es/isEqual';
 import prettyBytes from 'pretty-bytes';
-import { createSignal, For, onCleanup } from 'solid-js';
-import { errorLog } from '@/lib/log';
+import { createSignal, For } from 'solid-js';
+import { useTauriEvent } from '@/lib/hooks/useTauriEvent';
 import type { DiskUsageStatus } from '@/models';
+
+function deepEqual<T>(a: T, b: T): boolean {
+	return JSON.stringify(a) === JSON.stringify(b);
+}
 
 function DiskUsage() {
 	const [disks, setDisks] = createSignal<DiskUsageStatus[]>();
 
-	const unListen = listen('disk', (e: Event<DiskUsageStatus[]>) =>
+	useTauriEvent<DiskUsageStatus[]>('disk', payload =>
 		setDisks(prevState =>
-			isEqual(prevState, e.payload) ? prevState : e.payload,
+			deepEqual(prevState, payload) ? prevState : payload,
 		),
 	);
-
-	onCleanup(() => {
-		unListen.then(f => f()).catch(errorLog);
-	});
 
 	return (
 		<div class="font-united_sans_light flex h-[28vh] w-full flex-col flex-nowrap tracking-[0.092vh] sm:px-0.5 md:px-1.5 lg:px-2.5 xl:px-3.5">

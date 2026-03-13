@@ -1,10 +1,7 @@
 import { lazy } from 'solid-js';
 import Banner from '@/components/banner';
 
-const Content = lazy(async () => {
-	await new Promise(resolve => setTimeout(resolve, 100));
-	return import('@/components/system/content');
-});
+const Content = lazy(() => import('@/components/system/content'));
 
 function System() {
 	return (

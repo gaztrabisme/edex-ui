@@ -1,7 +1,6 @@
-import { type Event, listen } from '@tauri-apps/api/event';
 import prettyBytes from 'pretty-bytes';
-import { createSignal, For, onCleanup } from 'solid-js';
-import { errorLog } from '@/lib/log';
+import { createSignal, For } from 'solid-js';
+import { useTauriEvent } from '@/lib/hooks/useTauriEvent';
 import { cn } from '@/lib/utils';
 import type { GPUData, MemoryInformation, SystemData } from '@/models';
 
@@ -16,16 +15,12 @@ const MEMORY_INDICES = Array.from({ length: MEMORY_GRID_SIZE }, (_, i) => i);
 function MemInfo() {
 	const [memory, setMemory] = createSignal<MemLoad>();
 
-	const unListen = listen('system', (e: Event<SystemData>) =>
+	useTauriEvent<SystemData>('system', payload =>
 		setMemory({
-			cpuMemory: e.payload.memory,
-			gpu: e.payload.gpu,
+			cpuMemory: payload.memory,
+			gpu: payload.gpu,
 		}),
 	);
-
-	onCleanup(() => {
-		unListen.then(f => f()).catch(errorLog);
-	});
 
 	const getCellOpacityClass = (index: number) => {
 		const mem = memory();

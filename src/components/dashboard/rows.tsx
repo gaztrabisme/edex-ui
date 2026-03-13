@@ -1,15 +1,13 @@
-import { type Event, listen } from '@tauri-apps/api/event';
-import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
-import { errorLog } from '@/lib/log';
+import { createSignal, For, type JSX, Show } from 'solid-js';
+import { useTauriEvent } from '@/lib/hooks/useTauriEvent';
 import type { ProcessInformation } from '@/models';
 
 function TableRows(): JSX.Element {
 	const [processes, setProcesses] = createSignal<ProcessInformation[]>();
-	const unListen = listen('process', (e: Event<ProcessInformation[]>) =>
-		setProcesses(e.payload),
-	);
 
-	onCleanup(() => unListen.then(f => f()).catch(errorLog));
+	useTauriEvent<ProcessInformation[]>('process', payload =>
+		setProcesses(payload),
+	);
 
 	return (
 		<Show when={processes()} fallback={<div />}>

@@ -1,12 +1,12 @@
 use crate::event::main::ProcessEvent;
 use crate::file::main::{DirectoryWatcherEvent, WatcherPayload};
 use dashmap::DashMap;
-use log::error;
+use log::{error, warn};
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Write};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Listener};
+use tauri::{AppHandle, Emitter, Listener};
 use tokio::sync::mpsc;
 
 fn construct_cmd() -> CommandBuilder {
@@ -265,7 +265,18 @@ impl PtySessionManager {
         match pty_session_result {
             Ok(pty_session) => {
                 if active_sessions.contains_key(id) {
-                    error!("Session {} already exists, overwriting", id);
+                    // Kill the old session's shell process via its event listener,
+                    // then remove it. The child-watcher will handle final cleanup.
+                    let exit_payload =
+                        serde_json::json!({"type": "Exit"}).to_string();
+                    if let Err(e) = app_handle.emit(id, &exit_payload) {
+                        error!("Failed to send Exit to old session {}: {}", id, e);
+                    }
+                    active_sessions.remove(id);
+                    warn!(
+                        "Session {} already existed; killed old session before inserting new one",
+                        id
+                    );
                 }
                 let pid = pty_session.pid();
                 active_sessions.insert(id.to_owned(), pty_session);

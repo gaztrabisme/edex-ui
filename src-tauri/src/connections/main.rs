@@ -1,11 +1,16 @@
 use crate::event::main::ProcessEvent;
 use log::{error, warn};
 use procfs::net::TcpState;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
 use std::time::Duration;
 use tokio::sync::mpsc;
+
+/// Timeout for geolocation HTTP requests
+const GEOLOCATION_TIMEOUT: Duration = Duration::from_secs(5);
+/// Maximum IPs per batch geolocation request
+const GEOLOCATION_BATCH_SIZE: usize = 100;
 
 #[derive(Serialize, Clone, Debug)]
 pub struct GeoLocation {
@@ -21,6 +26,17 @@ pub struct ConnectionsData {
     pub user_lat: f64,
     pub user_lon: f64,
     pub connections: Vec<GeoLocation>,
+}
+
+/// Response from ip-api.com for a single IP or user location query
+#[derive(Deserialize, Debug)]
+struct GeoApiResponse {
+    status: Option<String>,
+    lat: Option<f64>,
+    lon: Option<f64>,
+    country: Option<String>,
+    city: Option<String>,
+    query: Option<String>,
 }
 
 pub struct ConnectionMonitor {
@@ -54,14 +70,14 @@ fn is_public_ip(ip: &IpAddr) -> bool {
 }
 
 impl ConnectionMonitor {
-    pub fn new(refresh_interval_secs: u64, event_tx: mpsc::UnboundedSender<ProcessEvent>) -> Self {
+    pub fn new(refresh_interval: Duration, event_tx: mpsc::UnboundedSender<ProcessEvent>) -> Self {
         let http_client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(5))
+            .timeout(GEOLOCATION_TIMEOUT)
             .build()
             .expect("Failed to create HTTP client");
 
         Self {
-            refresh_interval: Duration::from_secs(refresh_interval_secs),
+            refresh_interval,
             event_tx,
             geo_cache: HashMap::new(),
             user_location: None,
@@ -109,28 +125,28 @@ impl ConnectionMonitor {
                 connections,
             };
 
-            if let Err(e) = self
-                .event_tx
-                .send(ProcessEvent::Connections { connections_data })
-            {
-                error!("Failed to send connections data: {}", e);
-            }
+            self.send_event(ProcessEvent::Connections { connections_data });
+        }
+    }
+
+    fn send_event(&self, event: ProcessEvent) {
+        if let Err(e) = self.event_tx.send(event) {
+            error!("Failed to send event: {}", e);
         }
     }
 
     async fn fetch_user_location(&self) -> (f64, f64) {
         match self
             .http_client
+            // ip-api.com free tier requires HTTP (HTTPS needs pro subscription)
             .get("http://ip-api.com/json/?fields=status,lat,lon")
             .send()
             .await
         {
-            Ok(response) => match response.json::<serde_json::Value>().await {
-                Ok(json) => {
-                    if json.get("status").and_then(|s| s.as_str()) == Some("success") {
-                        let lat = json.get("lat").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                        let lon = json.get("lon").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                        (lat, lon)
+            Ok(response) => match response.json::<GeoApiResponse>().await {
+                Ok(geo) => {
+                    if geo.status.as_deref() == Some("success") {
+                        (geo.lat.unwrap_or(0.0), geo.lon.unwrap_or(0.0))
                     } else {
                         warn!("ip-api.com returned non-success status for user location");
                         (0.0, 0.0)
@@ -179,8 +195,7 @@ impl ConnectionMonitor {
     }
 
     async fn batch_geolocate(&mut self, ips: &[IpAddr]) {
-        // ip-api.com batch endpoint accepts max 100 IPs per request
-        for chunk in ips.chunks(100) {
+        for chunk in ips.chunks(GEOLOCATION_BATCH_SIZE) {
             let batch_body: Vec<serde_json::Value> = chunk
                 .iter()
                 .map(|ip| {
@@ -193,41 +208,26 @@ impl ConnectionMonitor {
 
             match self
                 .http_client
+                // ip-api.com free tier requires HTTP (HTTPS needs pro subscription)
                 .post("http://ip-api.com/batch")
                 .json(&batch_body)
                 .send()
                 .await
             {
-                Ok(response) => match response.json::<Vec<serde_json::Value>>().await {
+                Ok(response) => match response.json::<Vec<GeoApiResponse>>().await {
                     Ok(results) => {
                         for result in results {
-                            if result.get("status").and_then(|s| s.as_str()) == Some("success") {
-                                let query = result
-                                    .get("query")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("");
-                                let lat =
-                                    result.get("lat").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                                let lon =
-                                    result.get("lon").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                                let country = result
-                                    .get("country")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("")
-                                    .to_string();
-                                let city = result
-                                    .get("city")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("")
-                                    .to_string();
-
+                            if result.status.as_deref() == Some("success") {
+                                let query = result.query.as_deref().unwrap_or("");
                                 if let Ok(ip) = query.parse::<IpAddr>() {
                                     let geo = GeoLocation {
                                         ip: query.to_string(),
-                                        lat,
-                                        lon,
-                                        country,
-                                        city,
+                                        lat: result.lat.unwrap_or(0.0),
+                                        lon: result.lon.unwrap_or(0.0),
+                                        country: result
+                                            .country
+                                            .unwrap_or_default(),
+                                        city: result.city.unwrap_or_default(),
                                     };
                                     self.geo_cache.insert(ip, geo);
                                 }

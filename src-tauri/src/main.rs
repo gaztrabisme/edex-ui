@@ -4,6 +4,7 @@
 )]
 
 use log::{info, LevelFilter};
+use std::time::Duration;
 use sysinfo::System;
 use tauri::Manager;
 use tauri_plugin_log::{Target, TargetKind};
@@ -12,6 +13,11 @@ use crate::event::main::EventProcessor;
 use crate::file::main::DirectoryFileWatcher;
 use crate::session::main::PtySessionManager;
 use crate::sys::main::SystemMonitor;
+
+/// How often system stats (CPU, GPU, memory, processes) are polled
+const SYSTEM_POLL_INTERVAL: Duration = Duration::from_secs(1);
+/// How often TCP connections are scanned and geolocated
+const CONNECTION_POLL_INTERVAL: Duration = Duration::from_secs(5);
 
 mod connections;
 mod event;
@@ -93,12 +99,15 @@ fn main() {
             pty_manager.start(app.handle().clone());
 
             // refresh and emit system information
-            let mut monitor = SystemMonitor::new(1, process_event_sender.clone());
+            let mut monitor =
+                SystemMonitor::new(SYSTEM_POLL_INTERVAL, process_event_sender.clone());
             tauri::async_runtime::spawn(async move { monitor.run().await });
 
             // monitor active TCP connections and geolocate remote IPs
-            let mut connection_monitor =
-                connections::main::ConnectionMonitor::new(5, process_event_sender.clone());
+            let mut connection_monitor = connections::main::ConnectionMonitor::new(
+                CONNECTION_POLL_INTERVAL,
+                process_event_sender.clone(),
+            );
             tauri::async_runtime::spawn(async move { connection_monitor.run().await });
             Ok(())
         })

@@ -1,15 +1,9 @@
 import { lazy } from 'solid-js';
 import Banner from '@/components/banner';
 
-const GlobeView = lazy(async () => {
-	await new Promise(resolve => setTimeout(resolve, 200));
-	return import('@/components/network/globe');
-});
+const GlobeView = lazy(() => import('@/components/network/globe'));
 
-const NetworkContent = lazy(async () => {
-	await new Promise(resolve => setTimeout(resolve, 100));
-	return import('@/components/network/content');
-});
+const NetworkContent = lazy(() => import('@/components/network/content'));
 
 function Network() {
 	return (

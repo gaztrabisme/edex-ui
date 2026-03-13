@@ -1,7 +1,7 @@
-import { listen } from '@tauri-apps/api/event';
 import type { GlobeInstance } from 'globe.gl';
 import Globe from 'globe.gl';
 import { createEffect, on, onCleanup, onMount } from 'solid-js';
+import { useTauriEvent } from '@/lib/hooks/useTauriEvent';
 import { selectStyle, useTheme } from '@/lib/themes';
 import type { ConnectionsData } from '@/models';
 
@@ -88,9 +88,8 @@ function GlobeView() {
 	});
 
 	// Listen for connection data from Rust backend
-	const unListen = listen<ConnectionsData>('connections', event => {
+	useTauriEvent<ConnectionsData>('connections', data => {
 		if (!globeInstance) return;
-		const data = event.payload;
 
 		// User location as a glowing point
 		const borderColor = getBorderColor();
@@ -117,11 +116,6 @@ function GlobeView() {
 		}));
 
 		globeInstance.arcsData(arcs).arcColor('color');
-	});
-
-	onCleanup(() => {
-		// biome-ignore lint/suspicious/noConsole: standard promise error logging
-		unListen.then(f => f()).catch(console.error);
 	});
 
 	// Theme reactivity — update hex color, atmosphere, points, arcs
