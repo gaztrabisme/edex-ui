@@ -416,6 +416,7 @@ fn extract_network(networks: &Networks) -> Value {
 fn extract_disk_usage(disks: &Disks) -> Vec<DiskUsage> {
     let mut disk_usages: Vec<DiskUsage> = disks
         .iter()
+        .filter(|disk| disk.total_space() > 0)
         .map(|disk| {
             let total_space = disk.total_space();
             let available_space = disk.available_space();

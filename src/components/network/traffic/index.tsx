@@ -45,9 +45,7 @@ function NetworkTraffic(props: NetworkTrafficProps): JSX.Element {
 					borderVisible: false,
 				},
 				labels: {
-					fontSize: 10,
-					fillStyle: style().colors.main,
-					precision: 2,
+					disabled: true,
 				},
 				minValue: i === 0 ? 0 : undefined,
 				maxValue: i === 1 ? 0 : undefined,
