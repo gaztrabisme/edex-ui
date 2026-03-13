@@ -1,0 +1,168 @@
+import { listen } from '@tauri-apps/api/event';
+import type { GlobeInstance } from 'globe.gl';
+import Globe from 'globe.gl';
+import { createEffect, on, onCleanup, onMount } from 'solid-js';
+import { selectStyle, useTheme } from '@/lib/themes';
+import type { ConnectionsData } from '@/models';
+
+const COUNTRIES_GEOJSON_URL =
+	'https://cdn.jsdelivr.net/npm/globe.gl/example/datasets/ne_110m_admin_0_countries.geojson';
+
+function GlobeView() {
+	const { theme } = useTheme();
+	const style = () => selectStyle(theme());
+	let containerRef!: HTMLDivElement;
+	let globeInstance: GlobeInstance | undefined;
+
+	onMount(() => {
+		const mainColor = style().colors.main;
+
+		globeInstance = new Globe(containerRef)
+			.backgroundColor('rgba(0,0,0,0)')
+			.showGlobe(true)
+			.showAtmosphere(false)
+			.width(containerRef.clientWidth)
+			.height(containerRef.clientHeight)
+			.pointsMerge(true)
+			.arcStroke(0.5)
+			.arcDashLength(0.4)
+			.arcDashGap(0.2)
+			.arcDashAnimateTime(1500);
+
+		// Dark globe surface — no texture, just a dark material
+		const globeMaterial = globeInstance.globeMaterial() as {
+			color: { set: (c: string) => void };
+			emissive: { set: (c: string) => void };
+			emissiveIntensity: number;
+			opacity: number;
+			transparent: boolean;
+		};
+		globeMaterial.color.set('#080808');
+		globeMaterial.emissive.set('#000000');
+		globeMaterial.emissiveIntensity = 0;
+		globeMaterial.opacity = 0.9;
+		globeMaterial.transparent = true;
+
+		// Load country GeoJSON and render as hex polygons
+		fetch(COUNTRIES_GEOJSON_URL)
+			.then(res => res.json())
+			.then(countries => {
+				if (!globeInstance) return;
+				const features = countries.features.filter(
+					(f: { properties: { ISO_A2: string } }) =>
+						f.properties.ISO_A2 !== 'AQ',
+				);
+				globeInstance
+					.hexPolygonsData(features)
+					.hexPolygonResolution(3)
+					.hexPolygonMargin(0.35)
+					.hexPolygonUseDots(false)
+					.hexPolygonColor(() => mainColor)
+					.hexPolygonAltitude(0.005);
+			});
+
+		// Auto-rotate, allow spinning but no zoom/pan
+		const controls = globeInstance.controls();
+		controls.autoRotate = true;
+		controls.autoRotateSpeed = 0.3;
+		controls.enableZoom = false;
+		controls.enableRotate = true;
+		controls.enablePan = false;
+
+		// Responsive sizing
+		const ro = new ResizeObserver(() => {
+			if (globeInstance) {
+				globeInstance.width(containerRef.clientWidth);
+				globeInstance.height(containerRef.clientHeight);
+			}
+		});
+		ro.observe(containerRef);
+
+		onCleanup(() => {
+			ro.disconnect();
+			if (globeInstance) {
+				globeInstance.pauseAnimation();
+			}
+		});
+	});
+
+	// Listen for connection data from Rust backend
+	const unListen = listen<ConnectionsData>('connections', event => {
+		if (!globeInstance) return;
+		const data = event.payload;
+
+		// User location as a glowing point
+		globeInstance
+			.pointsData([
+				{
+					lat: data.user_lat,
+					lng: data.user_lon,
+					size: 0.6,
+					color: style().colors.main,
+				},
+			])
+			.pointColor('color')
+			.pointAltitude(0.01)
+			.pointRadius('size');
+
+		// Arcs from user to remote connections
+		const arcs = data.connections.map(conn => ({
+			startLat: data.user_lat,
+			startLng: data.user_lon,
+			endLat: conn.lat,
+			endLng: conn.lon,
+			color: style().colors.main,
+		}));
+
+		globeInstance.arcsData(arcs).arcColor('color');
+	});
+
+	onCleanup(() => {
+		// biome-ignore lint/suspicious/noConsole: standard promise error logging
+		unListen.then(f => f()).catch(console.error);
+	});
+
+	// Theme reactivity — update hex color, atmosphere, points, arcs
+	createEffect(
+		on(
+			() => theme(),
+			() => {
+				if (!globeInstance) return;
+				const mainColor = style().colors.main;
+
+				globeInstance.hexPolygonColor(() => mainColor);
+
+				const currentPoints = globeInstance.pointsData() as Array<{
+					lat: number;
+					lng: number;
+					size: number;
+					color: string;
+				}>;
+				if (currentPoints.length > 0) {
+					globeInstance.pointsData(
+						currentPoints.map(p => ({ ...p, color: mainColor })),
+					);
+				}
+				const currentArcs = globeInstance.arcsData() as Array<{
+					startLat: number;
+					startLng: number;
+					endLat: number;
+					endLng: number;
+					color: string;
+				}>;
+				if (currentArcs.length > 0) {
+					globeInstance.arcsData(
+						currentArcs.map(a => ({ ...a, color: mainColor })),
+					);
+				}
+			},
+		),
+	);
+
+	// biome-ignore lint/style/noNonNullAssertion: SolidJS definite assignment pattern
+	return (
+		<div ref={containerRef!} class="w-full min-h-0 flex-1 overflow-hidden" />
+	);
+}
+
+export default GlobeView;

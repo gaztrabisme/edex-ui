@@ -1,6 +1,11 @@
 import { lazy } from 'solid-js';
 import Banner from '@/components/banner';
 
+const GlobeView = lazy(async () => {
+	await new Promise(resolve => setTimeout(resolve, 200));
+	return import('@/components/network/globe');
+});
+
 const NetworkContent = lazy(async () => {
 	await new Promise(resolve => setTimeout(resolve, 100));
 	return import('@/components/network/content');
@@ -8,8 +13,9 @@ const NetworkContent = lazy(async () => {
 
 function Network() {
 	return (
-		<div class="border-default/30 relative box-border flex h-full w-[20vw] min-w-[280px] flex-col items-end sm:px-1 md:px-2 lg:px-3">
-			<Banner title={/*@once*/ 'PANEL'} name={/*@once*/ 'NETWORK'} />
+		<div class="border-default/30 relative box-border flex h-screen w-[20vw] min-w-[280px] flex-col items-end sm:px-1 md:px-2 lg:px-3">
+			<Banner title={'PANEL'} name={'NETWORK'} />
+			<GlobeView />
 			<NetworkContent />
 		</div>
 	);

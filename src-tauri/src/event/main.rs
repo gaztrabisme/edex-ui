@@ -1,3 +1,4 @@
+use crate::connections::main::ConnectionsData;
 use crate::file::main::DirectoryInfo;
 use crate::sys::main::{DiskUsage, ProcessInfo, SystemData};
 use log::{error, trace};
@@ -16,6 +17,7 @@ pub enum ProcessEvent {
     Disks { disks_data: Vec<DiskUsage> },
     Process { process_data: Vec<ProcessInfo> },
     Directory { directory_info: DirectoryInfo },
+    Connections { connections_data: ConnectionsData },
     Forward { id: String, data: Vec<u8> }, // Handle Pty Message forwarding
     ProcessExit { id: String, exit_code: Option<u32> }, // Handle Pty Session Exits
 }
@@ -65,6 +67,9 @@ impl EventProcessor {
             }
             ProcessEvent::Directory { directory_info } => {
                 self.send_data(UPDATE_FILES, directory_info);
+            }
+            ProcessEvent::Connections { connections_data } => {
+                self.send_data("connections", connections_data);
             }
         }
     }

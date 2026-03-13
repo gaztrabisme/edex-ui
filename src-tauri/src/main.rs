@@ -13,6 +13,7 @@ use crate::file::main::DirectoryFileWatcher;
 use crate::session::main::PtySessionManager;
 use crate::sys::main::SystemMonitor;
 
+mod connections;
 mod event;
 mod file;
 mod session;
@@ -94,6 +95,11 @@ fn main() {
             // refresh and emit system information
             let mut monitor = SystemMonitor::new(1, process_event_sender.clone());
             tauri::async_runtime::spawn(async move { monitor.run().await });
+
+            // monitor active TCP connections and geolocate remote IPs
+            let mut connection_monitor =
+                connections::main::ConnectionMonitor::new(5, process_event_sender.clone());
+            tauri::async_runtime::spawn(async move { connection_monitor.run().await });
             Ok(())
         })
         .run(tauri::generate_context!())

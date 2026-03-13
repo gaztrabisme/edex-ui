@@ -144,3 +144,17 @@ export interface TerminalContainer {
 	id: string;
 	terminal: () => JSXElement;
 }
+
+export interface GeoLocation {
+	ip: string;
+	lat: number;
+	lon: number;
+	country: string;
+	city: string;
+}
+
+export interface ConnectionsData {
+	user_lat: number;
+	user_lon: number;
+	connections: GeoLocation[];
+}
