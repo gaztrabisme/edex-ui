@@ -1,0 +1,109 @@
+/* Boot cursor blink */
+@keyframes blink {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0;
+	}
+}
+.boot-cursor {
+	animation: blink 0.6s step-end infinite;
+}
+
+/* Title entrance */
+@keyframes title-enter {
+	0% {
+		opacity: 0;
+		transform: scale(0.95);
+	}
+	100% {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+.boot-title-enter {
+	animation: title-enter 0.3s ease-out forwards;
+}
+
+/* Glitch effect on title text */
+.boot-glitch {
+	position: relative;
+}
+.boot-glitch::before,
+.boot-glitch::after {
+	content: attr(data-text);
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+}
+.boot-glitch::before {
+	clip-path: inset(0 0 60% 0);
+	animation: glitch-top 50ms linear infinite alternate;
+	color: inherit;
+	opacity: 0.8;
+}
+.boot-glitch::after {
+	clip-path: inset(60% 0 0 0);
+	animation: glitch-bottom 50ms linear infinite alternate-reverse;
+	color: inherit;
+	opacity: 0.8;
+}
+
+@keyframes glitch-top {
+	0% {
+		transform: translateX(-2px);
+	}
+	20% {
+		transform: translateX(2px);
+	}
+	40% {
+		transform: translateX(-1px);
+	}
+	60% {
+		transform: translateX(3px);
+	}
+	80% {
+		transform: translateX(-3px);
+	}
+	100% {
+		transform: translateX(1px);
+	}
+}
+@keyframes glitch-bottom {
+	0% {
+		transform: translateX(2px);
+	}
+	20% {
+		transform: translateX(-3px);
+	}
+	40% {
+		transform: translateX(1px);
+	}
+	60% {
+		transform: translateX(-2px);
+	}
+	80% {
+		transform: translateX(3px);
+	}
+	100% {
+		transform: translateX(-1px);
+	}
+}
+
+/* Fade out the entire boot overlay */
+@keyframes boot-fade {
+	0% {
+		opacity: 1;
+	}
+	100% {
+		opacity: 0;
+	}
+}
+.boot-fade-out {
+	animation: boot-fade 0.4s ease-in forwards;
+}
