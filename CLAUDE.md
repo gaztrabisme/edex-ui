@@ -30,7 +30,7 @@ A Tauri v2 rewrite of [eDEX-UI](https://github.com/GitSquared/edex-ui) — a ful
 
 ```
 src/                          # SolidJS frontend
-  App.tsx                     # Root layout: System | Terminal | Network + FileSystem
+  App.tsx                     # Root layout with per-panel ErrorBoundary
   components/
     terminal/                 # xterm.js terminal with tabs (Ctrl+T/W/Tab)
     filesystem/               # File browser grid, follows terminal CWD
@@ -38,6 +38,8 @@ src/                          # SolidJS frontend
     network/                  # Right panel: 3D globe, connection status, traffic, disk usage
       globe/                  # globe.gl 3D globe with live TCP connection arcs
     setting/                  # Settings modal (theme picker)
+    boot/                     # Boot animation (kernel log scroll + glitch title)
+    error-boundary/           # Panel error boundary with "SYSTEM MALFUNCTION" + restart
     banner/                   # Section header component
   lib/
     themes/                   # Theme system (CSS vars + xterm.js config)
@@ -65,8 +67,14 @@ source ~/.nvm/nvm.sh && nvm use 22
 # Dev (hot reload for frontend, recompiles Rust on change)
 WEBKIT_DISABLE_DMABUF_RENDERER=1 pnpm run dev
 
-# Production build
+# Production build (outputs binary + .deb + .rpm + .AppImage)
 pnpm run build
+
+# Run production binary directly
+./src-tauri/target/release/edex
+
+# Install system-wide (Debian/Ubuntu)
+sudo dpkg -i src-tauri/target/release/bundle/deb/edex_0.0.1_amd64.deb
 
 # Lint + format
 pnpm run check
@@ -74,6 +82,12 @@ pnpm run check
 # Type check
 pnpm run type-check
 ```
+
+## Release Build
+
+Production builds use optimized Cargo profile (`[profile.release]` in `Cargo.toml`):
+- `opt-level = 3`, `lto = true`, `codegen-units = 1`, `strip = true`
+- Outputs: standalone binary, `.deb`, `.rpm`, `.AppImage`
 
 ## Layout (32:9 Adapted)
 
@@ -106,9 +120,17 @@ Active theme: **TRON** (cyan `rgb(170, 207, 209)` on dark `#05080d`).
 - **Events** (Rust -> Frontend): system stats, PTY output, file changes — streamed via `app.emit()`
 - **Commands** (Frontend -> Rust): terminal write/resize, file actions — via `invoke()`
 
+## Error Handling
+
+- **Frontend**: Each panel (System, Terminal, FileSystem, Network) wrapped in `<PanelErrorBoundary>` — crashes show "SYSTEM MALFUNCTION" with restart button instead of white screen
+- **Backend**: No `expect()`/`unwrap()` on fallible paths — all use graceful fallbacks with logging
+- **Globe**: GeoJSON CDN fetch retries 2x with 5s delay; "NO CONNECTION" pulsing overlay when 0 active TCP connections
+- **Geo cache**: Bounded at 500 entries, full clear on overflow
+
 ## Conventions
 
 - SolidJS uses `createSignal`/`createResource`, NOT React hooks
-- Tailwind classes inline, no separate CSS files (except `index.css` for themes)
+- Tailwind classes inline, no separate CSS files (except `index.css` for themes, `boot/index.css` and `error-boundary/index.css` for animations)
 - Rust modules: each feature in its own dir (`sys/`, `session/`, `file/`, `event/`, `connections/`) with `mod.rs` + `main.rs`
 - Biome for linting/formatting (not ESLint/Prettier)
+- ip-api.com free tier requires HTTP (not HTTPS) — this is intentional, not a bug
