@@ -45,6 +45,7 @@ src/                          # SolidJS frontend
     setting/                  # Persistent settings via Tauri store
     queries/                  # TanStack Query hooks for system data
     os/                       # Tauri command wrappers
+    fileColors.ts             # Theme-derived file type colors (HSL hue rotation)
 
 src-tauri/                    # Rust backend
   src/main.rs                 # App setup, plugin init, background tasks
@@ -89,7 +90,7 @@ pnpm run type-check
 ```
 
 Right column (Network) spans full viewport height. Globe on top, network content below.
-Side panels use `w-[20vw]` instead of original `16vw` for ultrawide readability.
+Side panels use responsive `w-[16vw] lg:w-[20vw]` (16vw on standard screens, 20vw on ultrawide via 2560px `lg` breakpoint).
 Terminal uses `flex-1` instead of fixed `w-[68vw]` to fill remaining space.
 
 ## Theming
