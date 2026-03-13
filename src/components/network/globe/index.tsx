@@ -8,6 +8,13 @@ import type { ConnectionsData } from '@/models';
 const COUNTRIES_GEOJSON_URL =
 	'https://cdn.jsdelivr.net/npm/globe.gl/example/datasets/ne_110m_admin_0_countries.geojson';
 
+function getBorderColor(): string {
+	const raw = getComputedStyle(document.documentElement)
+		.getPropertyValue('--border-default')
+		.trim();
+	return raw ? `rgb(${raw.replace(/ /g, ', ')})` : 'rgb(251, 48, 72)';
+}
+
 function GlobeView() {
 	const { theme } = useTheme();
 	const style = () => selectStyle(theme());
@@ -86,6 +93,7 @@ function GlobeView() {
 		const data = event.payload;
 
 		// User location as a glowing point
+		const borderColor = getBorderColor();
 		globeInstance
 			.pointsData([
 				{
@@ -99,13 +107,13 @@ function GlobeView() {
 			.pointAltitude(0.01)
 			.pointRadius('size');
 
-		// Arcs from user to remote connections
+		// Arcs from user to remote connections — use border color
 		const arcs = data.connections.map(conn => ({
 			startLat: data.user_lat,
 			startLng: data.user_lon,
 			endLat: conn.lat,
 			endLng: conn.lon,
-			color: style().colors.main,
+			color: borderColor,
 		}));
 
 		globeInstance.arcsData(arcs).arcColor('color');
@@ -123,6 +131,7 @@ function GlobeView() {
 			() => {
 				if (!globeInstance) return;
 				const mainColor = style().colors.main;
+				const borderColor = getBorderColor();
 
 				const globeMaterial = globeInstance.globeMaterial() as {
 					emissive: { set: (c: string) => void };
@@ -150,7 +159,7 @@ function GlobeView() {
 				}>;
 				if (currentArcs.length > 0) {
 					globeInstance.arcsData(
-						currentArcs.map(a => ({ ...a, color: mainColor })),
+						currentArcs.map(a => ({ ...a, color: borderColor })),
 					);
 				}
 			},
