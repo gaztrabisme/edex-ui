@@ -33,15 +33,16 @@ function HistoryPopup(props: HistoryPopupProps) {
 		return history().filter(cmd => fuzzyMatch(q, cmd));
 	};
 
-	onMount(async () => {
-		try {
-			const items = await readHistory();
-			setHistory(items);
-		} catch (_) {
-			setHistory([]);
-		}
-		setLoading(false);
-		inputRef?.focus();
+	onMount(() => {
+		document.addEventListener('mousedown', handleClickOutside);
+
+		readHistory()
+			.then(items => setHistory(items))
+			.catch(() => setHistory([]))
+			.finally(() => {
+				setLoading(false);
+				inputRef?.focus();
+			});
 	});
 
 	function handleKeyDown(e: KeyboardEvent) {
@@ -85,10 +86,6 @@ function HistoryPopup(props: HistoryPopupProps) {
 			props.onClose();
 		}
 	}
-
-	onMount(() => {
-		document.addEventListener('mousedown', handleClickOutside);
-	});
 
 	onCleanup(() => {
 		document.removeEventListener('mousedown', handleClickOutside);

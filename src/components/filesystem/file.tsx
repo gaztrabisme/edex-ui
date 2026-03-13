@@ -1,7 +1,7 @@
 import { createMemo, For, type Resource } from 'solid-js';
 import FileTile from '@/components/filesystem/tile';
 import { openFile, writeToSession } from '@/lib/os';
-import { useActiveTerminal } from '@/lib/terminal';
+import { useTerminal } from '@/lib/terminal';
 import {
 	BACKWARD,
 	DIRECTORY,
@@ -18,7 +18,7 @@ interface FileSectionProps {
 }
 
 function FileSection(props: FileSectionProps) {
-	const active = useActiveTerminal();
+	const active = useTerminal().active;
 
 	const filteredFiles = createMemo(
 		() =>

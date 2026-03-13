@@ -30,7 +30,3 @@ export function useTerminal() {
 	}
 	return context;
 }
-
-export function useActiveTerminal() {
-	return useTerminal().active;
-}

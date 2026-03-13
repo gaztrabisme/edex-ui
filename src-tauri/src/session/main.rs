@@ -22,7 +22,7 @@ fn construct_cmd() -> CommandBuilder {
     });
     let mut cmd = CommandBuilder::new(&shell);
 
-    cmd.args(&["-l"]);
+    cmd.args(["-l"]);
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
     cmd.env("TERM_PROGRAM", "eDEX-UI");
@@ -79,7 +79,11 @@ impl PtySession {
 
         let master = pty_pair.master;
 
-        let pid = master.process_group_leader().expect("Fail to get pid.");
+        let pid = master.process_group_leader().ok_or_else(|| {
+            Into::<Box<dyn std::error::Error + Send + Sync>>::into(
+                "Failed to get process group leader pid",
+            )
+        })?;
 
         // Get reader and writer from master
         let pty_reader = master.try_clone_reader()?;
@@ -95,7 +99,7 @@ impl PtySession {
         // otherwise, it will prevent mpsc receiver from receiving the event
         let reader_handle = tauri::async_runtime::spawn_blocking(move || loop {
             match reader.fill_buf() {
-                Ok(data) if data.len() > 0 => {
+                Ok(data) if !data.is_empty() => {
                     let data = data.to_vec();
                     reader.consume(data.len());
                     if let Err(e) = pty_reader_sender.send(ProcessEvent::Forward {
@@ -125,9 +129,13 @@ impl PtySession {
         let event_id = app_handle.listen(id, move |event| {
             match serde_json::from_str::<PtySessionCommand>(event.payload()) {
                 Ok(PtySessionCommand::Write { data }) => {
-                    let mut w = writer.lock().unwrap(); // Clone avoided
-                    if let Err(e) = w.write(data.as_bytes()) {
-                        error!("Failed to write to session: {:?}", e);
+                    match writer.lock() {
+                        Ok(mut w) => {
+                            if let Err(e) = w.write(data.as_bytes()) {
+                                error!("Failed to write to session: {:?}", e);
+                            }
+                        }
+                        Err(e) => error!("Failed to lock writer mutex: {:?}", e),
                     }
                 }
                 Ok(PtySessionCommand::Resize { cols, rows }) => {
@@ -136,14 +144,23 @@ impl PtySession {
                         cols,
                         ..Default::default()
                     };
-                    let m = master.lock().unwrap(); // Clone avoided
-                    if let Err(e) = m.resize(size) {
-                        error!("Failed to resize session: {:?}", e);
+                    match master.lock() {
+                        Ok(m) => {
+                            if let Err(e) = m.resize(size) {
+                                error!("Failed to resize session: {:?}", e);
+                            }
+                        }
+                        Err(e) => error!("Failed to lock master mutex: {:?}", e),
                     }
                 }
                 Ok(PtySessionCommand::Exit) => {
-                    if let Err(e) = killer.lock().unwrap().kill() {
-                        error!("Failed to kill session: {:?}", e);
+                    match killer.lock() {
+                        Ok(mut k) => {
+                            if let Err(e) = k.kill() {
+                                error!("Failed to kill session: {:?}", e);
+                            }
+                        }
+                        Err(e) => error!("Failed to lock killer mutex: {:?}", e),
                     }
                 }
                 Err(e) => {

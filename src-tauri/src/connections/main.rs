@@ -1,5 +1,5 @@
 use crate::event::main::ProcessEvent;
-use log::{error, warn};
+use log::{error, info, warn};
 use procfs::net::TcpState;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -11,6 +11,8 @@ use tokio::sync::mpsc;
 const GEOLOCATION_TIMEOUT: Duration = Duration::from_secs(5);
 /// Maximum IPs per batch geolocation request
 const GEOLOCATION_BATCH_SIZE: usize = 100;
+/// Maximum number of entries in the geolocation cache before clearing
+const GEO_CACHE_MAX_SIZE: usize = 500;
 
 #[derive(Serialize, Clone, Debug)]
 pub struct GeoLocation {
@@ -47,6 +49,7 @@ pub struct ConnectionMonitor {
     http_client: reqwest::Client,
 }
 
+#[allow(clippy::nonminimal_bool)]
 fn is_public_ip(ip: &IpAddr) -> bool {
     match ip {
         IpAddr::V4(v4) => {
@@ -74,7 +77,10 @@ impl ConnectionMonitor {
         let http_client = reqwest::Client::builder()
             .timeout(GEOLOCATION_TIMEOUT)
             .build()
-            .expect("Failed to create HTTP client");
+            .unwrap_or_else(|e| {
+                warn!("Failed to create HTTP client with timeout, using default: {}", e);
+                reqwest::Client::new()
+            });
 
         Self {
             refresh_interval,
@@ -195,6 +201,15 @@ impl ConnectionMonitor {
     }
 
     async fn batch_geolocate(&mut self, ips: &[IpAddr]) {
+        // Evict cache if it exceeds the size limit
+        if self.geo_cache.len() >= GEO_CACHE_MAX_SIZE {
+            info!(
+                "Geo cache reached {} entries, clearing to prevent unbounded growth",
+                self.geo_cache.len()
+            );
+            self.geo_cache.clear();
+        }
+
         for chunk in ips.chunks(GEOLOCATION_BATCH_SIZE) {
             let batch_body: Vec<serde_json::Value> = chunk
                 .iter()
