@@ -21,6 +21,9 @@ export default defineConfig({
           if (id.includes('smoothie')) {
             return 'smoothie';
           }
+          if (id.includes('@codemirror/') || id.includes('codemirror')) {
+            return 'codemirror';
+          }
         },
       },
     },

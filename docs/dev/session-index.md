@@ -10,3 +10,4 @@
 | 006 | 2026-03-13 | Terminal QoL Tier C — zsh, autosuggestions, syntax highlighting, Starship, $SHELL support | Complete |
 | 007 | 2026-03-13 | Boot animation — kernel log scroll, glitch title, skip on keypress | Complete |
 | 008 | 2026-03-13 | Optimization assessment — performance & resource usage across full stack | Complete |
+| 009 | 2026-03-14 | Terminal replacement research — Warp alternatives, native embedding, xterm.js limitations | Complete |

@@ -26,6 +26,7 @@ import {
 } from 'solid-js';
 import ContextMenu from '@/components/terminal/context-menu';
 import HistoryPopup from '@/components/terminal/history';
+import InputEditor from '@/components/terminal/input-editor';
 import SearchBar from '@/components/terminal/search';
 
 /**
@@ -143,6 +144,7 @@ function Session({ id, active, onActivity }: SessionProps) {
 
 	const [showSearch, setShowSearch] = createSignal(false);
 	const [showHistory, setShowHistory] = createSignal(false);
+	const [editorMode, setEditorMode] = createSignal(true);
 	const [contextMenu, setContextMenu] = createSignal<{
 		x: number;
 		y: number;
@@ -178,15 +180,25 @@ function Session({ id, active, onActivity }: SessionProps) {
 
 			await resize(id, terminal.term, terminal.addons);
 
-			terminal.term.onData(v => writeToSession(id, v));
-
-			// Copy on select
-			const term = terminal.term;
-			term.onSelectionChange(() => {
-				const sel = term.getSelection();
-				if (sel) {
-					navigator.clipboard.writeText(sel);
+			// In editor mode, xterm.js onData only fires for raw mode keystrokes.
+			// In raw mode (interactive programs), all keystrokes pass through.
+			terminal.term.onData(v => {
+				if (!editorMode()) {
+					writeToSession(id, v);
 				}
+			});
+
+			// Copy on select — debounced to avoid clipboard spam during drag
+			const term = terminal.term;
+			let clipboardTimer: ReturnType<typeof setTimeout> | undefined;
+			term.onSelectionChange(() => {
+				clearTimeout(clipboardTimer);
+				clipboardTimer = setTimeout(() => {
+					const sel = term.getSelection();
+					if (sel) {
+						navigator.clipboard.writeText(sel);
+					}
+				}, 100);
 			});
 
 			// Visual bell flash
@@ -203,13 +215,16 @@ function Session({ id, active, onActivity }: SessionProps) {
 		}
 	});
 
-	// refocus on tab change
+	// refocus on tab change — focus editor in editor mode, xterm in raw mode
 	createEffect(
 		on(active, async active => {
 			try {
 				if (active === id) {
 					await resizeTerminal(id);
-					terminal?.term.focus();
+					if (!editorMode()) {
+						terminal?.term.focus();
+					}
+					// In editor mode, InputEditor handles its own focus via visible effect
 					await updateCurrentSession(id);
 				} else {
 					terminal?.term.blur();
@@ -238,8 +253,38 @@ function Session({ id, active, onActivity }: SessionProps) {
 		}),
 	);
 
+	// OSC 133 shell integration marker strings for auto-switching editor/raw mode.
+	// B = prompt ready (editor mode), C = command started (raw mode)
+	const OSC_133_B_BEL = '\x1b]133;B\x07';
+	const OSC_133_B_ST = '\x1b]133;B\x1b\\';
+	const OSC_133_C_BEL = '\x1b]133;C\x07';
+	const OSC_133_C_ST = '\x1b]133;C\x1b\\';
+
+	// Batch PTY output via RAF — reduces xterm.js write() calls during output floods
+	let pendingData = '';
+	let rafScheduled = false;
 	const unListen = listen(`data-${id}`, (e: Event<string>) => {
-		terminal?.term.write(e.payload);
+		const payload = e.payload;
+
+		// Detect OSC 133 markers for auto mode switching
+		if (payload.includes(OSC_133_B_BEL) || payload.includes(OSC_133_B_ST)) {
+			setEditorMode(true);
+		}
+		if (payload.includes(OSC_133_C_BEL) || payload.includes(OSC_133_C_ST)) {
+			setEditorMode(false);
+		}
+
+		pendingData += payload;
+		if (!rafScheduled) {
+			rafScheduled = true;
+			requestAnimationFrame(() => {
+				if (pendingData) {
+					terminal?.term.write(pendingData);
+					pendingData = '';
+				}
+				rafScheduled = false;
+			});
+		}
 		if (active() !== id && onActivity) {
 			onActivity(id);
 		}
@@ -255,6 +300,16 @@ function Session({ id, active, onActivity }: SessionProps) {
 		if (e.ctrlKey && e.shiftKey && e.key === 'H') {
 			e.preventDefault();
 			setShowHistory(true);
+		}
+
+		// Toggle editor/raw mode
+		if (e.ctrlKey && e.shiftKey && e.key === 'E') {
+			e.preventDefault();
+			setEditorMode(prev => !prev);
+			if (!editorMode()) {
+				terminal?.term.focus();
+			}
+			return;
 		}
 
 		// Clear scrollback
@@ -297,7 +352,10 @@ function Session({ id, active, onActivity }: SessionProps) {
 
 	return (
 		<div
-			class={cn(active() !== id && 'hidden', 'relative size-full p-2')}
+			class={cn(
+				active() !== id && 'hidden',
+				'relative flex size-full flex-col p-2',
+			)}
 			onContextMenu={e => {
 				e.preventDefault();
 				setContextMenu({ x: e.clientX, y: e.clientY });
@@ -319,7 +377,11 @@ function Session({ id, active, onActivity }: SessionProps) {
 					onSelect={(cmd: string) => {
 						writeToSession(id, cmd);
 						setShowHistory(false);
-						terminal?.term.focus();
+						if (editorMode()) {
+							// Focus stays on editor
+						} else {
+							terminal?.term.focus();
+						}
 					}}
 					onClose={() => {
 						setShowHistory(false);
@@ -343,7 +405,18 @@ function Session({ id, active, onActivity }: SessionProps) {
 					/>
 				)}
 			</Show>
-			<div class="size-full" ref={el => (terminalEl = el)} />
+			<div class="min-h-0 flex-1" ref={el => (terminalEl = el)} />
+			<InputEditor
+				theme={theme}
+				fontSize={fontSize}
+				visible={editorMode}
+				onSubmit={text => {
+					writeToSession(id, `${text}\n`);
+				}}
+				onRawKey={key => {
+					writeToSession(id, key);
+				}}
+			/>
 		</div>
 	);
 }

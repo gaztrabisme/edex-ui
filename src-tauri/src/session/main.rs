@@ -23,6 +23,62 @@ pub struct SessionWriters(pub Arc<DashMap<String, PtyWriter>>);
 #[derive(Clone, Default)]
 pub struct SessionPids(pub Arc<DashMap<String, i32>>);
 
+/// OSC 133 shell integration scripts.
+/// These inject semantic markers so the terminal can detect prompt/command boundaries:
+///   A = prompt start, B = prompt end (user input begins), C = command start, D = command end
+const ZSH_SHELL_INTEGRATION: &str = r#"
+# eDEX-UI OSC 133 shell integration
+__edex_osc133_precmd() { printf '\e]133;A\e\\' ; }
+__edex_osc133_preexec() { printf '\e]133;C\e\\' ; }
+precmd_functions=(__edex_osc133_precmd "${precmd_functions[@]}")
+preexec_functions+=(__edex_osc133_preexec)
+PS1="%{$(printf '\e]133;B\e\\')%}${PS1}"
+"#;
+
+const BASH_SHELL_INTEGRATION: &str = r#"
+# eDEX-UI OSC 133 shell integration
+__edex_osc133_prompt() { printf '\e]133;A\e\\' ; }
+PROMPT_COMMAND="__edex_osc133_prompt${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+PS1="\[\e]133;B\e\\\\\]${PS1}"
+trap 'printf "\e]133;C\e\\"' DEBUG
+"#;
+
+/// Inject OSC 133 shell integration by writing the script to the PTY.
+/// Detects shell type from $SHELL and writes the appropriate script.
+/// Runs on a background thread with a delay to let the shell initialize first.
+fn inject_shell_integration(writer: &PtyWriter) {
+    let shell = std::env::var("SHELL").unwrap_or_default();
+    let script = if shell.contains("zsh") {
+        ZSH_SHELL_INTEGRATION
+    } else if shell.contains("bash") {
+        BASH_SHELL_INTEGRATION
+    } else {
+        return;
+    };
+
+    let writer = writer.clone();
+    let script = script.to_owned();
+    std::thread::spawn(move || {
+        // Wait for shell to initialize before injecting
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        match writer.lock() {
+            Ok(mut w) => {
+                if let Err(e) = w.write_all(script.as_bytes()) {
+                    warn!("Failed to inject shell integration: {}", e);
+                    return;
+                }
+                // Clear screen after injection so user doesn't see the script
+                if let Err(e) = w.write_all(b"\nclear\n") {
+                    warn!("Failed to clear after shell integration: {}", e);
+                }
+            }
+            Err(e) => {
+                warn!("Failed to lock writer for shell integration: {}", e);
+            }
+        }
+    });
+}
+
 fn construct_cmd() -> CommandBuilder {
     let shell = std::env::var("SHELL").unwrap_or_else(|_| {
         if cfg!(target_os = "macos") {
@@ -139,7 +195,12 @@ impl PtySession {
         let writer = Arc::new(Mutex::new(
             Box::new(writer) as Box<dyn Write + Send>
         ));
-        session_writers.0.insert(id.to_owned(), writer);
+        session_writers.0.insert(id.to_owned(), writer.clone());
+
+        // Inject OSC 133 shell integration for auto editor/raw mode switching.
+        // This writes a small script to the PTY that hooks into the shell's
+        // prompt/preexec lifecycle to emit semantic markers.
+        inject_shell_integration(&writer);
 
         let master = Mutex::new(master);
         let killer = Mutex::new(child.clone_killer());
